@@ -220,7 +220,8 @@ pub async fn llm_complete(config: LlmConfig, input: LlmInput) -> LlmOutput {
 
             let resp = client
                 .post(url)
-                .header("x-api-key", &api_key)
+                // .header("x-api-key", &api_key)
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("anthropic-version", "2023-06-01")
                 .header("Content-Type", "application/json")
                 .json(&body)
