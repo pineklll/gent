@@ -220,6 +220,40 @@ fn InspectorProperties(
             let collection_clone = collection.clone();
             view! {
                 <div class="property-group">
+                    <label class="property-label">"Collection"</label>
+                    <input
+                        type="text"
+                        class="property-input"
+                        prop:value={collection_clone.clone()}
+                        on:change={
+                            let output_for_collection = output_clone.clone();
+                            let query_for_collection = query_clone.clone();
+                            move |ev| {
+                                let new_value = event_target_value(&ev);
+                                on_update_node.run((node_id, NodeVariant::Retrieval { query: query_for_collection.clone(), output: output_for_collection.clone(), collection: new_value }));
+                            }
+                        }
+                    />
+                </div>
+                <div class="property-group">
+                    <label class="property-label">"Output"</label>
+                    <select
+                        class="property-input"
+                        on:change={
+                            let query_for_output = query_clone.clone();
+                            let collection_for_output = collection_clone.clone();
+                            move |ev| {
+                                let new_value = event_target_value(&ev);
+                                on_update_node.run((node_id, NodeVariant::Retrieval { query: query_for_output.clone(), output: new_value, collection: collection_for_output.clone() }));
+                            }
+                        }
+                    >
+                        <option value="TextOnly" selected={output_clone == "TextOnly"}>"Text Only"</option>
+                        <option value="MetadataOnly" selected={output_clone == "MetadataOnly"}>"Metadata Only"</option>
+                        <option value="TextAndMetadata" selected={output_clone == "TextAndMetadata"}>"Text + Metadata"</option>
+                    </select>
+                </div>
+                <div class="property-group">
                     <label class="property-label">"Query"</label>
                     <input
                         type="text"
@@ -231,41 +265,6 @@ fn InspectorProperties(
                             move |ev| {
                                 let new_value = event_target_value(&ev);
                                 on_update_node.run((node_id, NodeVariant::Retrieval { query: new_value, output: output_for_query.clone(), collection: collection_for_query.clone() }));
-                            }
-                        }
-                    />
-                </div>
-                <div class="property-group">
-                    <label class="property-label">"Output"</label>
-                    <select
-                        class="property-input"
-                        prop:value={output_clone.clone()}
-                        on:change={
-                            let query_for_output = query_clone.clone();
-                            let collection_for_output = collection_clone.clone();
-                            move |ev| {
-                                let new_value = event_target_value(&ev);
-                                on_update_node.run((node_id, NodeVariant::Retrieval { query: query_for_output.clone(), output: new_value, collection: collection_for_output.clone() }));
-                            }
-                        }
-                    >
-                        <option value="TextOnly">"TextOnly"</option>
-                        <option value="MetadataOnly">"MetadataOnly"</option>
-                        <option value="TextAndMetadata">"TextAndMetadata"</option>
-                    </select>
-                </div>
-                <div class="property-group">
-                    <label class="property-label">"Collection"</label>
-                    <input
-                        type="text"
-                        class="property-input"
-                        prop:value={collection_clone.clone()}
-                        on:change={
-                            let query_for_collection = query_clone.clone();
-                            let output_for_collection = output_clone.clone();
-                            move |ev| {
-                                let new_value = event_target_value(&ev);
-                                on_update_node.run((node_id, NodeVariant::Retrieval { query: query_for_collection.clone(), output: output_for_collection.clone(), collection: new_value }));
                             }
                         }
                     />

@@ -43,12 +43,33 @@ fn render_variant_body(
                 rows="3"
             >{template.clone()}</textarea>
         }.into_any(),
-        NodeVariant::Retrieval { query, .. } => view! {
+        NodeVariant::Retrieval { query, output, collection } => view! {
+            <div class="node-variant-fields">
+                <input
+                    type="text"
+                    class="node-variant-input"
+                    value={collection.clone()}
+                    placeholder="collection name"
+                />
+                <select class="node-variant-select">
+                    <option value="TextOnly" selected={output == "TextOnly"}>"Text Only"</option>
+                    <option value="MetadataOnly" selected={output == "MetadataOnly"}>"Metadata Only"</option>
+                    <option value="TextAndMetadata" selected={output == "TextAndMetadata"}>"Text + Metadata"</option>
+                </select>
+                <input
+                    type="text"
+                    class="node-variant-input"
+                    value={query.clone()}
+                    placeholder="Search query..."
+                />
+            </div>
+        }.into_any(),
+        NodeVariant::Index { collection } => view! {
             <input
                 type="text"
                 class="node-variant-input"
-                value={query.clone()}
-                placeholder="Search query..."
+                value={collection.clone()}
+                placeholder="collection name"
             />
         }.into_any(),
         NodeVariant::Summarizer { max_length } => view! {
