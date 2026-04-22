@@ -22,6 +22,8 @@ pub struct ProviderConfig {
     pub api_key: Option<String>,
     /// Base endpoint URL (maps to `custom_url` in the LLM command).
     pub endpoint: Option<String>,
+    /// MiniMax group ID for embedding API.
+    pub group_id: Option<String>,
 }
 
 static CONFIG: OnceCell<AppConfig> = OnceCell::new();
