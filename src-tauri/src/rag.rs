@@ -129,11 +129,7 @@ pub async fn retrieve(
 
     let mut retrieval_results = Vec::with_capacity(n);
     for i in 0..n {
-        let _id_str = match ids_vec.get(i) {
-            Some(s) => s.as_str(),
-            _ => continue,
-        };
-        let doc_str = match docs_vec.get(i) {
+                let doc_str = match docs_vec.get(i) {
             Some(Some(s)) => s.as_str(),
             _ => continue,
         };
@@ -146,7 +142,7 @@ pub async fn retrieve(
             _ => continue,
         };
 
-        let score = 1.0 - (dist_val.clamp(0.0, 2.0) / 2.0);
+        let score = (1.0 - dist_val).clamp(0.0, 1.0);
         let text = match &output_enum {
             RetrievalOutput::TextOnly => doc_str.to_string(),
             RetrievalOutput::MetadataOnly => String::new(),
