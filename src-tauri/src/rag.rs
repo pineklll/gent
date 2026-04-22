@@ -39,7 +39,7 @@ pub async fn index_documents(
     let client = ChromaHttpClient::new(Default::default());
 
     let coll = client
-        .create_collection(&collection, None, None)
+        .get_or_create_collection(&collection, None, None)
         .await
         .map_err(|e| format!("Chroma create/get collection error: {}", e))?;
 
@@ -149,7 +149,7 @@ pub async fn retrieve(
         let score = 1.0 - (dist_val.clamp(0.0, 2.0) / 2.0);
         let text = match &output_enum {
             RetrievalOutput::TextOnly => doc_str.to_string(),
-            RetrievalOutput::MetadataOnly => doc_str.to_string(),
+            RetrievalOutput::MetadataOnly => String::new(),
             RetrievalOutput::TextAndMetadata => doc_str.to_string(),
         };
         retrieval_results.push(RetrievalResult {
