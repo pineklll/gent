@@ -8,7 +8,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::components::canvas::geometry::is_text_input_keyboard;
 use crate::components::canvas::state::{
     default_ports_for_type, default_variant_for_type, BundledGroup, ConnectionState, NodeState,
-    NodeStatus, SavedSelection,
+    NodeStatus, NodeVariant, SavedSelection,
 };
 use crate::components::canvas::Canvas;
 use crate::components::execution_engine::{
@@ -138,6 +138,41 @@ async fn call_llm_complete(
     }
     let js_value = tauri_invoke::invoke("llm_complete".into(), &opts).await?;
     serde_wasm_bindgen::from_value(js_value).map_err(|e| format!("deserialization failed: {:?}", e))
+}
+
+async fn call_retrieve(
+    collection: String,
+    query: String,
+    top_k: usize,
+    group_id: String,
+    api_key: String,
+    output_type: String,
+) -> Result<Vec<crate::components::execution_engine::RetrievalResult>, String> {
+    use crate::tauri_invoke;
+    let opts = js_sys::Object::new();
+    if !js_sys::Reflect::set(&opts, &"collection".into(), &collection.into()).unwrap_or(false) {
+        return Err("Failed to set collection".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false) {
+        return Err("Failed to set query".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"top_k".into(), &JsValue::from_f64(top_k as f64)).unwrap_or(false) {
+        return Err("Failed to set top_k".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"group_id".into(), &group_id.into()).unwrap_or(false) {
+        return Err("Failed to set group_id".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false) {
+        return Err("Failed to set api_key".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"output_type".into(), &output_type.into()).unwrap_or(false) {
+        return Err("Failed to set output_type".to_string());
+    }
+    let js_value = tauri_invoke::invoke("retrieve".into(), &opts).await?;
+    let results: Vec<crate::components::execution_engine::RetrievalResult> =
+        serde_wasm_bindgen::from_value(js_value)
+            .map_err(|e| format!("deserialization failed: {:?}", e))?;
+    Ok(results)
 }
 
 /// Main application layout with left panel, canvas, and right panel
@@ -833,6 +868,66 @@ pub fn AppLayout() -> impl IntoView {
                             }
                         }
                         exec.tasks.push(model_task);
+                    } else if node.node_type == "retrieval" {
+                        let retrieval_variant = node.variant.clone();
+                        let query_text = connections_snapshot
+                            .iter()
+                            .find(|c| c.target_node_id == exec_node_id && c.target_port_name == "query")
+                            .and_then(|c| node_results.get(&c.source_node_id))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let (collection, output_type) = if let NodeVariant::Retrieval { query: _, output, collection } = retrieval_variant {
+                            (collection, output)
+                        } else {
+                            (String::new(), "TextOnly".to_string())
+                        };
+
+                        let top_k = 4usize;
+                        let group_id = "".to_string();
+                        let api_key = "".to_string();
+
+                        let mut task = Task::new(exec_node_id, "retrieval", parent_id.clone());
+                        task.status = TaskStatus::Running;
+                        task.started_at = Some(Timestamp::now());
+                        task.add_message(
+                            &format!("Retrieving from '{}': {}", collection, query_text),
+                            TraceLevel::Info,
+                        );
+
+                        let result = call_retrieve(
+                            collection.clone(),
+                            query_text.clone(),
+                            top_k,
+                            group_id,
+                            api_key,
+                            output_type.clone(),
+                        )
+                        .await;
+
+                        match result {
+                            Ok(results) => {
+                                let output_text = results
+                                    .iter()
+                                    .map(|r| r.text.clone())
+                                    .collect::<Vec<_>>()
+                                    .join("\n---\n");
+                                task.status = TaskStatus::Complete;
+                                task.finished_at = Some(Timestamp::now());
+                                task.result = Some(output_text.clone());
+                                task.add_message(
+                                    &format!("Retrieved {} results from '{}'", results.len(), collection),
+                                    TraceLevel::Info,
+                                );
+                                node_results.insert(exec_node_id, output_text);
+                            }
+                            Err(e) => {
+                                task.status = TaskStatus::Error;
+                                task.finished_at = Some(Timestamp::now());
+                                task.add_message(&format!("Retrieval error: {}", e), TraceLevel::Error);
+                            }
+                        }
+                        exec.tasks.push(task);
                     } else {
                         let (mut task, result) = execute_node_sync(node, &upstream, parent_id);
                         if task.messages.len() == 1 {

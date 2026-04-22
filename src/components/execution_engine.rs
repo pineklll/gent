@@ -1,5 +1,21 @@
 use std::collections::{HashMap, VecDeque};
 
+/// Output mode for retrieval nodes
+#[derive(Clone, Debug)]
+pub enum RetrievalOutput {
+    TextOnly,
+    MetadataOnly,
+    TextAndMetadata,
+}
+
+/// A single retrieval result
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RetrievalResult {
+    pub text: String,
+    pub metadata: serde_json::Value,
+    pub score: f32,
+}
+
 /// WASM-compatible timestamp using js_sys::Date
 #[derive(Clone, Copy, Debug)]
 pub struct Timestamp(u64);
@@ -295,6 +311,19 @@ pub fn execute_node_sync(
         "if_condition" | "loop" => {
             task.add_message("Control flow stub - taking first branch", TraceLevel::Warn);
             upstream_results.values().next().cloned()
+        }
+        "index" => {
+            let collection = if let NodeVariant::Index { collection } = &node.variant {
+                collection.clone()
+            } else {
+                String::new()
+            };
+            let input = upstream_results.values().next().cloned().unwrap_or_default();
+            task.add_message(
+                &format!("Indexing to '{}': {} chars", collection, input.len()),
+                TraceLevel::Info,
+            );
+            Some(input)
         }
         _ => {
             task.add_message(
