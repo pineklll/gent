@@ -214,20 +214,64 @@ fn InspectorProperties(
                 >{template.clone()}</textarea>
             </div>
         }.into_any(),
-        NodeVariant::Retrieval { query } => view! {
-            <div class="property-group">
-                <label class="property-label">"Query"</label>
-                <input
-                    type="text"
-                    class="property-input"
-                    prop:value={query.clone()}
-                    on:change=move |ev| {
-                        let new_value = event_target_value(&ev);
-                        on_update_node.run((node_id, NodeVariant::Retrieval { query: new_value }));
-                    }
-                />
-            </div>
-        }.into_any(),
+        NodeVariant::Retrieval { query, output, collection } => {
+            let query_clone = query.clone();
+            let output_clone = output.clone();
+            let collection_clone = collection.clone();
+            view! {
+                <div class="property-group">
+                    <label class="property-label">"Query"</label>
+                    <input
+                        type="text"
+                        class="property-input"
+                        prop:value={query_clone.clone()}
+                        on:change={
+                            let output_for_query = output_clone.clone();
+                            let collection_for_query = collection_clone.clone();
+                            move |ev| {
+                                let new_value = event_target_value(&ev);
+                                on_update_node.run((node_id, NodeVariant::Retrieval { query: new_value, output: output_for_query.clone(), collection: collection_for_query.clone() }));
+                            }
+                        }
+                    />
+                </div>
+                <div class="property-group">
+                    <label class="property-label">"Output"</label>
+                    <select
+                        class="property-input"
+                        prop:value={output_clone.clone()}
+                        on:change={
+                            let query_for_output = query_clone.clone();
+                            let collection_for_output = collection_clone.clone();
+                            move |ev| {
+                                let new_value = event_target_value(&ev);
+                                on_update_node.run((node_id, NodeVariant::Retrieval { query: query_for_output.clone(), output: new_value, collection: collection_for_output.clone() }));
+                            }
+                        }
+                    >
+                        <option value="TextOnly">"TextOnly"</option>
+                        <option value="MetadataOnly">"MetadataOnly"</option>
+                        <option value="TextAndMetadata">"TextAndMetadata"</option>
+                    </select>
+                </div>
+                <div class="property-group">
+                    <label class="property-label">"Collection"</label>
+                    <input
+                        type="text"
+                        class="property-input"
+                        prop:value={collection_clone.clone()}
+                        on:change={
+                            let query_for_collection = query_clone.clone();
+                            let output_for_collection = output_clone.clone();
+                            move |ev| {
+                                let new_value = event_target_value(&ev);
+                                on_update_node.run((node_id, NodeVariant::Retrieval { query: query_for_collection.clone(), output: output_for_collection.clone(), collection: new_value }));
+                            }
+                        }
+                    />
+                </div>
+            }.into_any()
+        },
         NodeVariant::Summarizer { max_length } => view! {
             <div class="property-group">
                 <label class="property-label">"Max Length"</label>
@@ -396,6 +440,20 @@ fn InspectorProperties(
                         on_update_node.run((node_id, NodeVariant::JsonOutput { schema: new_value }));
                     }
                 >{schema.clone()}</textarea>
+            </div>
+        }.into_any(),
+        NodeVariant::Index { collection } => view! {
+            <div class="property-group">
+                <label class="property-label">"Collection"</label>
+                <input
+                    type="text"
+                    class="property-input"
+                    prop:value={collection.clone()}
+                    on:change=move |ev| {
+                        let new_value = event_target_value(&ev);
+                        on_update_node.run((node_id, NodeVariant::Index { collection: new_value }));
+                    }
+                />
             </div>
         }.into_any(),
         NodeVariant::ModelConfig { format, model_name, api_key, custom_url } => {

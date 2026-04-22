@@ -70,6 +70,12 @@ pub const NODE_TYPES: &[NodeType] = &[
         description: "Vector DB retrieval",
     },
     NodeType {
+        id: "index",
+        name: "Index",
+        category: "Context",
+        description: "Index text into Chroma vector store",
+    },
+    NodeType {
         id: "summarizer",
         name: "Summarizer",
         category: "Context",

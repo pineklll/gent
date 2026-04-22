@@ -55,6 +55,11 @@ pub enum NodeVariant {
     },
     Retrieval {
         query: String,
+        output: String,
+        collection: String,
+    },
+    Index {
+        collection: String,
     },
     Summarizer {
         max_length: u32,
@@ -195,7 +200,19 @@ pub fn default_ports_for_type(node_type: &str) -> Vec<Port> {
             },
             Port {
                 name: "result".into(),
-                port_type: PortType::Embeddings,
+                port_type: PortType::Text,
+                direction: PortDirection::Out,
+            },
+        ],
+        "index" => vec![
+            Port {
+                name: "input".into(),
+                port_type: PortType::Text,
+                direction: PortDirection::In,
+            },
+            Port {
+                name: "output".into(),
+                port_type: PortType::Text,
                 direction: PortDirection::Out,
             },
         ],
@@ -482,6 +499,11 @@ pub fn default_variant_for_type(node_type: &str) -> NodeVariant {
         },
         "retrieval" => NodeVariant::Retrieval {
             query: String::new(),
+            output: "TextOnly".to_string(),
+            collection: String::new(),
+        },
+        "index" => NodeVariant::Index {
+            collection: String::new(),
         },
         "summarizer" => NodeVariant::Summarizer { max_length: 500 },
         "planner_agent" => NodeVariant::PlannerAgent {

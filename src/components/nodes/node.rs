@@ -43,7 +43,7 @@ fn render_variant_body(
                 rows="3"
             >{template.clone()}</textarea>
         }.into_any(),
-        NodeVariant::Retrieval { query } => view! {
+        NodeVariant::Retrieval { query, .. } => view! {
             <input
                 type="text"
                 class="node-variant-input"
