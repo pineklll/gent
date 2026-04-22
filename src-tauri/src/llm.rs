@@ -359,6 +359,34 @@ pub async fn embed_text(
             }
             match response.json::<serde_json::Value>().await {
                 Ok(data) => {
+                    // Check for MiniMax API error responses (HTTP 200 but body contains error)
+                    if let Some(base_resp) = data.get("base_resp").and_then(|r| r.as_object()) {
+                        if let Some(status_code) = base_resp.get("status_code").and_then(|s| s.as_i64()) {
+                            if status_code != 0 {
+                                let error_msg = base_resp
+                                    .get("status_msg")
+                                    .and_then(|m| m.as_str())
+                                    .unwrap_or("Unknown error")
+                                    .to_string();
+                                return EmbeddingOutput {
+                                    vectors: vec![],
+                                    total_tokens: 0,
+                                    error: format!("MiniMax API error {}: {}", status_code, error_msg),
+                                };
+                            }
+                        }
+                    }
+                    // Also check for generic error field
+                    if let Some(error_obj) = data.get("error").and_then(|e| e.as_str()) {
+                        if !error_obj.is_empty() {
+                            return EmbeddingOutput {
+                                vectors: vec![],
+                                total_tokens: 0,
+                                error: error_obj.to_string(),
+                            };
+                        }
+                    }
+
                     let vectors: Vec<Vec<f32>> = data["vectors"]
                         .as_array()
                         .map(|outer_arr| {
