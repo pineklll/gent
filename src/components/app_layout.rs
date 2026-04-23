@@ -144,8 +144,6 @@ async fn call_retrieve(
     collection: String,
     query: String,
     top_k: usize,
-    group_id: String,
-    api_key: String,
     output_type: String,
 ) -> Result<Vec<crate::components::execution_engine::RetrievalResult>, String> {
     use crate::tauri_invoke;
@@ -158,12 +156,6 @@ async fn call_retrieve(
     }
     if !js_sys::Reflect::set(&opts, &"top_k".into(), &JsValue::from_f64(top_k as f64)).unwrap_or(false) {
         return Err("Failed to set top_k".to_string());
-    }
-    if !js_sys::Reflect::set(&opts, &"group_id".into(), &group_id.into()).unwrap_or(false) {
-        return Err("Failed to set group_id".to_string());
-    }
-    if !js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false) {
-        return Err("Failed to set api_key".to_string());
     }
     if !js_sys::Reflect::set(&opts, &"output_type".into(), &output_type.into()).unwrap_or(false) {
         return Err("Failed to set output_type".to_string());
@@ -884,8 +876,6 @@ pub fn AppLayout() -> impl IntoView {
                         };
 
                         let top_k = 4usize;
-                        let group_id = "".to_string();
-                        let api_key = "".to_string();
 
                         let mut task = Task::new(exec_node_id, "retrieval", parent_id.clone());
                         task.status = TaskStatus::Running;
@@ -899,8 +889,6 @@ pub fn AppLayout() -> impl IntoView {
                             collection.clone(),
                             query_text.clone(),
                             top_k,
-                            group_id,
-                            api_key,
                             output_type.clone(),
                         )
                         .await;
