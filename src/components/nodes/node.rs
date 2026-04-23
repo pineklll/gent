@@ -43,25 +43,21 @@ fn render_variant_body(
                 rows="3"
             >{template.clone()}</textarea>
         }.into_any(),
-        NodeVariant::Retrieval { query, output, collection } => view! {
+        NodeVariant::Retrieval { virtual_uri, query, top_k } => view! {
             <div class="node-variant-fields">
                 <input
                     type="text"
                     class="node-variant-input"
-                    value={collection.clone()}
-                    placeholder="collection name"
+                    value={virtual_uri.clone()}
+                    placeholder="viking://resources/..."
                 />
-                <select class="node-variant-select">
-                    <option value="TextOnly" selected={output == "TextOnly"}>"Text Only"</option>
-                    <option value="MetadataOnly" selected={output == "MetadataOnly"}>"Metadata Only"</option>
-                    <option value="TextAndMetadata" selected={output == "TextAndMetadata"}>"Text + Metadata"</option>
-                </select>
                 <input
                     type="text"
                     class="node-variant-input"
                     value={query.clone()}
                     placeholder="Search query..."
                 />
+                <div class="node-variant-label">"top_k: " {*top_k}</div>
             </div>
         }.into_any(),
         NodeVariant::Index { collection } => view! {

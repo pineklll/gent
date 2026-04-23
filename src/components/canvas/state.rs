@@ -54,9 +54,9 @@ pub enum NodeVariant {
         template: String,
     },
     Retrieval {
+        virtual_uri: String,
         query: String,
-        output: String,
-        collection: String,
+        top_k: usize,
     },
     Index {
         collection: String,
@@ -498,9 +498,9 @@ pub fn default_variant_for_type(node_type: &str) -> NodeVariant {
             template: String::new(),
         },
         "retrieval" => NodeVariant::Retrieval {
+            virtual_uri: String::new(),
             query: String::new(),
-            output: "TextOnly".to_string(),
-            collection: String::new(),
+            top_k: 4,
         },
         "index" => NodeVariant::Index {
             collection: String::new(),

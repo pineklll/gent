@@ -63,14 +63,6 @@ async fn export_graph(path: String, json: String) -> Result<(), String> {
     fs::write(&path, json).map_err(|e| format!("failed to write file: {}", e))
 }
 
-#[tauri::command]
-async fn index_documents(
-    collection: String,
-    documents: Vec<String>,
-) -> Result<u32, String> {
-    rag::index_documents(collection, documents).await
-}
-
 #[tauri::command(rename_all = "snake_case")]
 async fn retrieve(
     virtual_uri: String,
@@ -119,7 +111,6 @@ pub fn run() {
             import_graph,
             export_graph,
             // RAG commands
-            index_documents,
             retrieve,
         ])
         .run(tauri::generate_context!())

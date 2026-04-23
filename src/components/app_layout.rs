@@ -865,13 +865,11 @@ pub fn AppLayout() -> impl IntoView {
                             .cloned()
                             .unwrap_or_default();
 
-                        let virtual_uri = if let NodeVariant::Retrieval { query: _, output: _, collection } = retrieval_variant {
-                            format!("viking://resources/{}/", collection)
+                        let (virtual_uri, top_k) = if let NodeVariant::Retrieval { virtual_uri, query: _, top_k } = retrieval_variant {
+                            (virtual_uri, top_k)
                         } else {
-                            String::new()
+                            (String::new(), 4)
                         };
-
-                        let top_k = 4usize;
 
                         let mut task = Task::new(exec_node_id, "retrieval", parent_id.clone());
                         task.status = TaskStatus::Running;
