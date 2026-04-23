@@ -67,10 +67,8 @@ async fn export_graph(path: String, json: String) -> Result<(), String> {
 async fn index_documents(
     collection: String,
     documents: Vec<String>,
-    group_id: String,
-    api_key: String,
 ) -> Result<u32, String> {
-    rag::index_documents(collection, documents, group_id, api_key).await
+    rag::index_documents(collection, documents).await
 }
 
 #[tauri::command]
@@ -78,11 +76,9 @@ async fn retrieve(
     collection: String,
     query: String,
     top_k: usize,
-    group_id: String,
-    api_key: String,
     output_type: String,
 ) -> Result<Vec<rag::RetrievalResult>, String> {
-    rag::retrieve(collection, query, top_k, group_id, api_key, output_type).await
+    rag::retrieve(collection, query, top_k, output_type).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

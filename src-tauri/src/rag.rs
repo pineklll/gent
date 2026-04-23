@@ -1,6 +1,5 @@
-use chroma::ChromaHttpClient;
 use serde::{Deserialize, Serialize};
-use crate::llm::{embed_text, EmbeddingConfig, EmbeddingOutput};
+use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RetrievalOutput {
@@ -16,85 +15,90 @@ pub struct RetrievalResult {
     pub score: f32,
 }
 
+/// Builds a viking:// path for a document within a collection.
+/// Example: viking://resources/my_collection/doc_0
+fn make_viking_path(collection: &str, doc_id: &str) -> String {
+    format!("viking://resources/{}/{}", collection, doc_id)
+}
+
 pub async fn index_documents(
     collection: String,
     documents: Vec<String>,
-    group_id: String,
-    api_key: String,
 ) -> Result<u32, String> {
     if documents.is_empty() {
         return Ok(0);
     }
 
-    let config = EmbeddingConfig {
-        api_key,
-        group_id,
-    };
+    for (i, doc) in documents.iter().enumerate() {
+        let path = make_viking_path(&collection, &format!("doc_{}", i));
+        let output = Command::new("ov")
+            .args(["add-resource", &path, "--content", doc])
+            .output()
+            .await
+            .map_err(|e| format!("failed to spawn ov add-resource: {}", e))?;
 
-    let output: EmbeddingOutput = embed_text(config, documents.clone(), "db").await;
-    if !output.error.is_empty() {
-        return Err(format!("embedding error: {}", output.error));
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("ov add-resource failed: {}", stderr));
+        }
     }
 
-    let client = ChromaHttpClient::new(Default::default());
-
-    let coll = client
-        .get_or_create_collection(&collection, None, None)
-        .await
-        .map_err(|e| format!("Chroma create/get collection error: {}", e))?;
-
-    let ids: Vec<String> = (0..documents.len())
-        .map(|i| format!("{}-{}", collection, i))
-        .collect();
-
-    coll.add(
-        ids,
-        output.vectors,
-        Some(documents.iter().map(|d| Some(d.clone())).collect()),
-        None,
-        None,
-    )
-    .await
-    .map_err(|e| format!("Chroma add error: {}", e))?;
-
     Ok(documents.len() as u32)
+}
+
+/// Represents a single result from `ov find`.
+/// The output format of `ov find --output json` is assumed to be JSON
+/// with a structure like: { "results": [{ "content": "...", "score": 0.95, ... }] }
+/// If the actual output differs, adjust the fields accordingly.
+#[derive(Debug, Deserialize)]
+struct OvFindResult {
+    #[serde(rename = "content", default)]
+    content: Option<String>,
+    #[serde(rename = "text", default)]
+    text: Option<String>,
+    #[serde(rename = "score", default)]
+    score: Option<f32>,
+    #[serde(rename = "metadata", default)]
+    metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OvFindResponse {
+    #[serde(rename = "results", default)]
+    results: Vec<OvFindResult>,
 }
 
 pub async fn retrieve(
     collection: String,
     query: String,
     top_k: usize,
-    group_id: String,
-    api_key: String,
     output_type: String,
 ) -> Result<Vec<RetrievalResult>, String> {
-    let config = EmbeddingConfig {
-        api_key,
-        group_id,
-    };
+    let path = make_viking_path(&collection, "");
+    let output = Command::new("ov")
+        .args(["find", &path, &query, "--output", "json"])
+        .output()
+        .await
+        .map_err(|e| format!("failed to spawn ov find: {}", e))?;
 
-    let output: EmbeddingOutput = embed_text(config, vec![query.clone()], "query").await;
-    if !output.error.is_empty() {
-        return Err(format!("embedding error: {}", output.error));
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("ov find failed: {}", stderr));
     }
 
-    let query_vector = output
-        .vectors
-        .first()
-        .ok_or("no embedding returned")?
-        .clone();
+    let stdout = String::from_utf8_lossy(&output.stdout);
 
-    let client = ChromaHttpClient::new(Default::default());
-
-    let coll = client
-        .get_collection(&collection)
-        .await
-        .map_err(|e| format!("Chroma get collection error: {}", e))?;
-
-    let results = coll
-        .query(vec![query_vector], Some(top_k as u32), None, None, None)
-        .await
-        .map_err(|e| format!("Chroma query error: {}", e))?;
+    // Parse JSON output. If ov find defaults to table format, stdout may contain
+    // non-JSON preamble. Try to extract JSON from it.
+    let response: OvFindResponse = serde_json::from_str(&stdout)
+        .or_else(|_| {
+            // Fallback: strip any non-JSON prefix/suffix
+            let json_start = stdout.find('{').unwrap_or(0);
+            let json_end = stdout.rfind('}').map(|i| i + 1).unwrap_or(stdout.len());
+            let json_str = &stdout[json_start..json_end];
+            serde_json::from_str(json_str)
+        })
+        .map_err(|e| format!("failed to parse ov find output: {} - stdout: {}", e, stdout))?;
 
     let output_enum = match output_type.as_str() {
         "MetadataOnly" => RetrievalOutput::MetadataOnly,
@@ -102,58 +106,23 @@ pub async fn retrieve(
         _ => RetrievalOutput::TextOnly,
     };
 
-    // Extract the first (and only) query batch from each field
-    let ids_vec = results.ids.first();
-    let docs_vec = results.documents.as_ref().and_then(|v| v.first());
-    let metas_vec = results.metadatas.as_ref().and_then(|v| v.first());
-    let dists_vec = results.distances.as_ref().and_then(|v| v.first());
+    let results: Vec<RetrievalResult> = response
+        .results
+        .into_iter()
+        .take(top_k)
+        .map(|r| {
+            let text = match &output_enum {
+                RetrievalOutput::TextOnly => r.content.or(r.text).unwrap_or_default(),
+                RetrievalOutput::MetadataOnly => String::new(),
+                RetrievalOutput::TextAndMetadata => r.content.or(r.text).unwrap_or_default(),
+            };
+            RetrievalResult {
+                text,
+                metadata: r.metadata.unwrap_or(serde_json::json!({})),
+                score: r.score.unwrap_or(0.0),
+            }
+        })
+        .collect();
 
-    let ids_vec = match ids_vec {
-        Some(v) => v,
-        None => return Ok(Vec::new()),
-    };
-    let docs_vec = match docs_vec {
-        Some(v) => v,
-        None => return Ok(Vec::new()),
-    };
-    let metas_vec = match metas_vec {
-        Some(v) => v,
-        None => return Ok(Vec::new()),
-    };
-    let dists_vec = match dists_vec {
-        Some(v) => v,
-        None => return Ok(Vec::new()),
-    };
-
-    let n = ids_vec.len().min(docs_vec.len()).min(metas_vec.len()).min(dists_vec.len());
-
-    let mut retrieval_results = Vec::with_capacity(n);
-    for i in 0..n {
-                let doc_str = match docs_vec.get(i) {
-            Some(Some(s)) => s.as_str(),
-            _ => continue,
-        };
-        let meta_val = match metas_vec.get(i) {
-            Some(Some(m)) => serde_json::to_value(m).unwrap_or(serde_json::json!({})),
-            _ => continue,
-        };
-        let dist_val = match dists_vec.get(i) {
-            Some(Some(d)) => *d,
-            _ => continue,
-        };
-
-        let score = (1.0 - dist_val).clamp(0.0, 1.0);
-        let text = match &output_enum {
-            RetrievalOutput::TextOnly => doc_str.to_string(),
-            RetrievalOutput::MetadataOnly => String::new(),
-            RetrievalOutput::TextAndMetadata => doc_str.to_string(),
-        };
-        retrieval_results.push(RetrievalResult {
-            text,
-            metadata: meta_val,
-            score,
-        });
-    }
-
-    Ok(retrieval_results)
+    Ok(results)
 }
