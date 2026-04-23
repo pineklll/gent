@@ -11,6 +11,7 @@ pub enum RetrievalOutput {
 /// A single retrieval result
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RetrievalResult {
+    pub uri: String,
     pub text: String,
     pub metadata: serde_json::Value,
     pub score: f32,

@@ -10,6 +10,7 @@ pub enum RetrievalOutput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalResult {
+    pub uri: String,
     pub text: String,
     pub metadata: serde_json::Value,
     pub score: f32,
@@ -52,6 +53,8 @@ pub async fn index_documents(
 /// If the actual output differs, adjust the fields accordingly.
 #[derive(Debug, Deserialize)]
 struct OvFindResult {
+    #[serde(rename = "uri", default)]
+    uri: Option<String>,
     #[serde(rename = "content", default)]
     content: Option<String>,
     #[serde(rename = "text", default)]
@@ -117,6 +120,7 @@ pub async fn retrieve(
                 RetrievalOutput::TextAndMetadata => r.content.or(r.text).unwrap_or_default(),
             };
             RetrievalResult {
+                uri: r.uri.unwrap_or_default(),
                 text,
                 metadata: r.metadata.unwrap_or(serde_json::json!({})),
                 score: r.score.unwrap_or(0.0),

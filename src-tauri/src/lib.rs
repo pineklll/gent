@@ -71,7 +71,7 @@ async fn index_documents(
     rag::index_documents(collection, documents).await
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 async fn retrieve(
     collection: String,
     query: String,
