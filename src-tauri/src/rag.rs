@@ -2,13 +2,6 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RetrievalOutput {
-    TextOnly,
-    MetadataOnly,
-    TextAndMetadata,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalResult {
     pub uri: String,
     pub text: String,
@@ -72,14 +65,12 @@ struct OvFindResponse {
 }
 
 pub async fn retrieve(
-    collection: String,
+    virtual_uri: String,
     query: String,
     top_k: usize,
-    output_type: String,
 ) -> Result<Vec<RetrievalResult>, String> {
-    let path = make_viking_path(&collection, "");
     let output = Command::new("ov")
-        .args(["find", &path, &query, "--output", "json"])
+        .args(["find", &virtual_uri, &query, "--output", "json"])
         .output()
         .await
         .map_err(|e| format!("failed to spawn ov find: {}", e))?;
@@ -103,25 +94,14 @@ pub async fn retrieve(
         })
         .map_err(|e| format!("failed to parse ov find output: {} - stdout: {}", e, stdout))?;
 
-    let output_enum = match output_type.as_str() {
-        "MetadataOnly" => RetrievalOutput::MetadataOnly,
-        "TextAndMetadata" => RetrievalOutput::TextAndMetadata,
-        _ => RetrievalOutput::TextOnly,
-    };
-
     let results: Vec<RetrievalResult> = response
         .results
         .into_iter()
         .take(top_k)
         .map(|r| {
-            let text = match &output_enum {
-                RetrievalOutput::TextOnly => r.content.or(r.text).unwrap_or_default(),
-                RetrievalOutput::MetadataOnly => String::new(),
-                RetrievalOutput::TextAndMetadata => r.content.or(r.text).unwrap_or_default(),
-            };
             RetrievalResult {
                 uri: r.uri.unwrap_or_default(),
-                text,
+                text: r.content.or(r.text).unwrap_or_default(),
                 metadata: r.metadata.unwrap_or(serde_json::json!({})),
                 score: r.score.unwrap_or(0.0),
             }

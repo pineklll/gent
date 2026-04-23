@@ -73,12 +73,11 @@ async fn index_documents(
 
 #[tauri::command(rename_all = "snake_case")]
 async fn retrieve(
-    collection: String,
+    virtual_uri: String,
     query: String,
     top_k: usize,
-    output_type: String,
 ) -> Result<Vec<rag::RetrievalResult>, String> {
-    rag::retrieve(collection, query, top_k, output_type).await
+    rag::retrieve(virtual_uri, query, top_k).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

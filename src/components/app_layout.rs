@@ -141,24 +141,20 @@ async fn call_llm_complete(
 }
 
 async fn call_retrieve(
-    collection: String,
+    virtual_uri: String,
     query: String,
     top_k: usize,
-    output_type: String,
 ) -> Result<Vec<crate::components::execution_engine::RetrievalResult>, String> {
     use crate::tauri_invoke;
     let opts = js_sys::Object::new();
-    if !js_sys::Reflect::set(&opts, &"collection".into(), &collection.into()).unwrap_or(false) {
-        return Err("Failed to set collection".to_string());
+    if !js_sys::Reflect::set(&opts, &"virtual_uri".into(), &virtual_uri.into()).unwrap_or(false) {
+        return Err("Failed to set virtual_uri".to_string());
     }
     if !js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false) {
         return Err("Failed to set query".to_string());
     }
     if !js_sys::Reflect::set(&opts, &"top_k".into(), &JsValue::from_f64(top_k as f64)).unwrap_or(false) {
         return Err("Failed to set top_k".to_string());
-    }
-    if !js_sys::Reflect::set(&opts, &"output_type".into(), &output_type.into()).unwrap_or(false) {
-        return Err("Failed to set output_type".to_string());
     }
     let js_value = tauri_invoke::invoke("retrieve".into(), &opts).await?;
     let results: Vec<crate::components::execution_engine::RetrievalResult> =
@@ -869,8 +865,9 @@ pub fn AppLayout() -> impl IntoView {
                             .cloned()
                             .unwrap_or_default();
 
-                        let (collection, output_type) = if let NodeVariant::Retrieval { query: _, output, collection } = retrieval_variant {
-                            (collection, output)
+                        let (virtual_uri, output_type) = if let NodeVariant::Retrieval { query: _, output, collection } = retrieval_variant {
+                            let uri = format!("viking://resources/{}/", collection);
+                            (uri, output)
                         } else {
                             (String::new(), "TextOnly".to_string())
                         };
@@ -881,15 +878,14 @@ pub fn AppLayout() -> impl IntoView {
                         task.status = TaskStatus::Running;
                         task.started_at = Some(Timestamp::now());
                         task.add_message(
-                            &format!("Retrieving from '{}': {}", collection, query_text),
+                            &format!("Retrieving from '{}': {}", virtual_uri, query_text),
                             TraceLevel::Info,
                         );
 
                         let result = call_retrieve(
-                            collection.clone(),
+                            virtual_uri.clone(),
                             query_text.clone(),
                             top_k,
-                            output_type.clone(),
                         )
                         .await;
 
@@ -904,7 +900,7 @@ pub fn AppLayout() -> impl IntoView {
                                 task.finished_at = Some(Timestamp::now());
                                 task.result = Some(output_text.clone());
                                 task.add_message(
-                                    &format!("Retrieved {} results from '{}'", results.len(), collection),
+                                    &format!("Retrieved {} results from '{}'", results.len(), virtual_uri),
                                     TraceLevel::Info,
                                 );
                                 node_results.insert(exec_node_id, output_text);
