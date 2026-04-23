@@ -865,11 +865,10 @@ pub fn AppLayout() -> impl IntoView {
                             .cloned()
                             .unwrap_or_default();
 
-                        let (virtual_uri, output_type) = if let NodeVariant::Retrieval { query: _, output, collection } = retrieval_variant {
-                            let uri = format!("viking://resources/{}/", collection);
-                            (uri, output)
+                        let virtual_uri = if let NodeVariant::Retrieval { query: _, output: _, collection } = retrieval_variant {
+                            format!("viking://resources/{}/", collection)
                         } else {
-                            (String::new(), "TextOnly".to_string())
+                            String::new()
                         };
 
                         let top_k = 4usize;

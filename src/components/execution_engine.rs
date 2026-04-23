@@ -1,13 +1,5 @@
 use std::collections::{HashMap, VecDeque};
 
-/// Output mode for retrieval nodes
-#[derive(Clone, Debug)]
-pub enum RetrievalOutput {
-    TextOnly,
-    MetadataOnly,
-    TextAndMetadata,
-}
-
 /// A single retrieval result
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RetrievalResult {
