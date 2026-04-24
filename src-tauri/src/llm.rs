@@ -57,19 +57,6 @@ pub struct LlmOutput {
     pub error: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmbeddingConfig {
-    pub api_key: String,
-    pub group_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmbeddingOutput {
-    pub vectors: Vec<Vec<f32>>,
-    pub total_tokens: u32,
-    pub error: String,
-}
-
 fn resolve_api_key(config: &LlmConfig) -> Result<String, String> {
     if !config.api_key.is_empty() {
         return Ok(config.api_key.clone());
@@ -80,13 +67,6 @@ fn resolve_api_key(config: &LlmConfig) -> Result<String, String> {
         _ => return Err("unknown format".to_string()),
     };
     env::var(env_key).map_err(|_| "missing API key".to_string())
-}
-
-fn resolve_embedding_api_key(config: &EmbeddingConfig) -> Result<String, String> {
-    if !config.api_key.is_empty() {
-        return Ok(config.api_key.clone());
-    }
-    env::var("MINIMAX_API_KEY").map_err(|_| "missing MINIMAX_API_KEY".to_string())
 }
 
 // OpenAI response shapes
@@ -306,121 +286,6 @@ pub async fn llm_complete(config: LlmConfig, input: LlmInput) -> LlmOutput {
             model: String::new(),
             finish_reason: String::new(),
             error: "unknown format".to_string(),
-        },
-    }
-}
-
-pub async fn embed_text(
-    config: EmbeddingConfig,
-    texts: Vec<String>,
-    embedding_type: &str, // "db" or "query"
-) -> EmbeddingOutput {
-    let api_key = match resolve_embedding_api_key(&config) {
-        Ok(k) => k,
-        Err(e) => {
-            return EmbeddingOutput {
-                vectors: vec![],
-                total_tokens: 0,
-                error: e,
-            }
-        }
-    };
-
-    let client = Client::new();
-    let url = format!(
-        "https://api.minimax.chat/v1/embeddings?GroupId={}",
-        config.group_id
-    );
-
-    let body = serde_json::json!({
-        "texts": texts,
-        "model": "embo-01",
-        "type": embedding_type
-    });
-
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await;
-
-    match resp {
-        Ok(response) => {
-            if !response.status().is_success() {
-                let status = response.status();
-                let text = response.text().await.unwrap_or_default();
-                return EmbeddingOutput {
-                    vectors: vec![],
-                    total_tokens: 0,
-                    error: format!("HTTP {}: {}", status, text),
-                };
-            }
-            match response.json::<serde_json::Value>().await {
-                Ok(data) => {
-                    // Check for MiniMax API error responses (HTTP 200 but body contains error)
-                    if let Some(base_resp) = data.get("base_resp").and_then(|r| r.as_object()) {
-                        if let Some(status_code) = base_resp.get("status_code").and_then(|s| s.as_i64()) {
-                            if status_code != 0 {
-                                let error_msg = base_resp
-                                    .get("status_msg")
-                                    .and_then(|m| m.as_str())
-                                    .unwrap_or("Unknown error")
-                                    .to_string();
-                                return EmbeddingOutput {
-                                    vectors: vec![],
-                                    total_tokens: 0,
-                                    error: format!("MiniMax API error {}: {}", status_code, error_msg),
-                                };
-                            }
-                        }
-                    }
-                    // Also check for generic error field
-                    if let Some(error_obj) = data.get("error").and_then(|e| e.as_str()) {
-                        if !error_obj.is_empty() {
-                            return EmbeddingOutput {
-                                vectors: vec![],
-                                total_tokens: 0,
-                                error: error_obj.to_string(),
-                            };
-                        }
-                    }
-
-                    let vectors: Vec<Vec<f32>> = data["vectors"]
-                        .as_array()
-                        .map(|outer_arr| {
-                            outer_arr
-                                .iter()
-                                .filter_map(|v| {
-                                    v.as_array().map(|inner_arr| {
-                                        inner_arr
-                                            .iter()
-                                            .filter_map(|elem| elem.as_f64().map(|f| f as f32))
-                                            .collect::<Vec<f32>>()
-                                    })
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    let total_tokens = data["total_tokens"].as_u64().unwrap_or(0) as u32;
-                    EmbeddingOutput {
-                        vectors,
-                        total_tokens,
-                        error: String::new(),
-                    }
-                }
-                Err(e) => EmbeddingOutput {
-                    vectors: vec![],
-                    total_tokens: 0,
-                    error: format!("parse error: {}", e),
-                },
-            }
-        }
-        Err(e) => EmbeddingOutput {
-            vectors: vec![],
-            total_tokens: 0,
-            error: format!("request failed: {}", e),
         },
     }
 }

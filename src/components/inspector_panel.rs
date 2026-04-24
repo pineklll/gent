@@ -214,10 +214,9 @@ fn InspectorProperties(
                 >{template.clone()}</textarea>
             </div>
         }.into_any(),
-        NodeVariant::Retrieval { virtual_uri, query, top_k } => {
+        NodeVariant::Retrieval { virtual_uri, limit } => {
             let virtual_uri_clone = virtual_uri.clone();
-            let query_clone = query.clone();
-            let top_k_clone = top_k;
+            let limit_clone = limit;
             view! {
                 <div class="property-group">
                     <label class="property-label">"Virtual URI"</label>
@@ -226,45 +225,27 @@ fn InspectorProperties(
                         class="property-input"
                         prop:value={virtual_uri_clone.clone()}
                         on:change={
-                            let query_for_uri = query_clone.clone();
-                            let top_k_for_uri = top_k_clone;
+                            let limit_for_uri = limit_clone;
                             move |ev| {
                                 let new_value = event_target_value(&ev);
-                                on_update_node.run((node_id, NodeVariant::Retrieval { virtual_uri: new_value, query: query_for_uri.clone(), top_k: top_k_for_uri }));
+                                on_update_node.run((node_id, NodeVariant::Retrieval { virtual_uri: new_value, limit: limit_for_uri }));
                             }
                         }
                     />
                 </div>
                 <div class="property-group">
-                    <label class="property-label">"Query"</label>
-                    <input
-                        type="text"
-                        class="property-input"
-                        prop:value={query_clone.clone()}
-                        on:change={
-                            let virtual_uri_for_query = virtual_uri_clone.clone();
-                            let top_k_for_query = top_k_clone;
-                            move |ev| {
-                                let new_value = event_target_value(&ev);
-                                on_update_node.run((node_id, NodeVariant::Retrieval { virtual_uri: virtual_uri_for_query.clone(), query: new_value, top_k: top_k_for_query }));
-                            }
-                        }
-                    />
-                </div>
-                <div class="property-group">
-                    <label class="property-label">"Top K"</label>
+                    <label class="property-label">"Limit"</label>
                     <input
                         type="number"
                         class="property-input"
-                        prop:value={top_k_clone as f64}
+                        prop:value={limit_clone as f64}
                         min="1"
                         max="100"
                         on:change={
-                            let virtual_uri_for_topk = virtual_uri_clone.clone();
-                            let query_for_topk = query_clone.clone();
+                            let virtual_uri_for_limit = virtual_uri_clone.clone();
                             move |ev| {
                                 if let Ok(new_value) = event_target_value(&ev).parse::<usize>() {
-                                    on_update_node.run((node_id, NodeVariant::Retrieval { virtual_uri: virtual_uri_for_topk.clone(), query: query_for_topk.clone(), top_k: new_value }));
+                                    on_update_node.run((node_id, NodeVariant::Retrieval { virtual_uri: virtual_uri_for_limit.clone(), limit: new_value }));
                                 }
                             }
                         }

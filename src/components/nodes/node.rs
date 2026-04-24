@@ -9,6 +9,7 @@ fn render_variant_body(
     variant: &NodeVariant,
     node_id: u32,
     on_text_change: &Option<Callback<(u32, String)>>,
+    on_limit_change: &Option<Callback<(u32, usize)>>,
 ) -> impl IntoView {
     match variant {
         NodeVariant::UserInput { text } => {
@@ -43,23 +44,43 @@ fn render_variant_body(
                 rows="3"
             >{template.clone()}</textarea>
         }.into_any(),
-        NodeVariant::Retrieval { virtual_uri, query, top_k } => view! {
-            <div class="node-variant-fields">
-                <input
-                    type="text"
-                    class="node-variant-input"
-                    value={virtual_uri.clone()}
-                    placeholder="viking://resources/..."
-                />
-                <input
-                    type="text"
-                    class="node-variant-input"
-                    value={query.clone()}
-                    placeholder="Search query..."
-                />
-                <div class="node-variant-label">"top_k: " {*top_k}</div>
-            </div>
-        }.into_any(),
+        NodeVariant::Retrieval { virtual_uri, limit } => {
+            let cb = on_text_change.clone();
+            let limit_cb = on_limit_change.clone();
+            view! {
+                <div class="node-variant-fields">
+                    <input
+                        type="text"
+                        class="node-variant-input"
+                        value={virtual_uri.clone()}
+                        placeholder="viking://resources/..."
+                        on:change={move |ev| {
+                            let new_value = event_target_value(&ev);
+                            if let Some(callback) = cb {
+                                callback.run((node_id, new_value));
+                            }
+                        }}
+                    />
+                    <div class="node-variant-field">
+                        <label>"limit"</label>
+                        <input
+                            type="number"
+                            class="node-variant-input small"
+                            value={*limit as f64}
+                            min="1"
+                            max="100"
+                            on:change={move |ev| {
+                                if let Ok(new_value) = event_target_value(&ev).parse::<usize>() {
+                                    if let Some(callback) = limit_cb {
+                                        callback.run((node_id, new_value));
+                                    }
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+            }.into_any()
+        }
         NodeVariant::Index { collection } => view! {
             <input
                 type="text"
@@ -233,6 +254,8 @@ pub fn GraphNode(
     on_trigger: Option<Callback<u32>>,
     #[prop(default = None)] _on_variant_change: Option<Callback<NodeVariant>>,
     #[prop(default = None)] on_text_change: Option<Callback<(u32, String)>>,
+    /// Callback when limit changes in a Retrieval node
+    #[prop(default = None)] on_limit_change: Option<Callback<(u32, usize)>>,
     /// Callback when node is right-clicked for inspection
     /// Args: (node_id, is_double_click)
     #[prop(default = None)]
@@ -327,7 +350,7 @@ pub fn GraphNode(
                             "Run"
                         </button>
                     }.into_any(),
-                    _ => render_variant_body(&variant, node_id, &on_text_change).into_any(),
+                    _ => render_variant_body(&variant, node_id, &on_text_change, &on_limit_change).into_any(),
                 }}
             </div>
             {/* Dynamic input ports */}

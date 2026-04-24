@@ -55,8 +55,7 @@ pub enum NodeVariant {
     },
     Retrieval {
         virtual_uri: String,
-        query: String,
-        top_k: usize,
+        limit: usize,
     },
     Index {
         collection: String,
@@ -499,8 +498,7 @@ pub fn default_variant_for_type(node_type: &str) -> NodeVariant {
         },
         "retrieval" => NodeVariant::Retrieval {
             virtual_uri: String::new(),
-            query: String::new(),
-            top_k: 4,
+            limit: 10,
         },
         "index" => NodeVariant::Index {
             collection: String::new(),

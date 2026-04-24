@@ -68,6 +68,9 @@ pub fn Canvas(
     /// Callback when text input changes in a node
     #[prop(default = None)]
     on_text_change: Option<Callback<(u32, String)>>,
+    /// Callback when limit changes in a Retrieval node
+    #[prop(default = None)]
+    on_limit_change: Option<Callback<(u32, usize)>>,
     /// Callback when a node is right-clicked for inspection
     /// Args: (node_id, is_double_click)
     #[prop(default = None)]
@@ -951,6 +954,7 @@ pub fn Canvas(
                                 cancel_connection_drag={Some(cancel_connection_drag)}
                                 on_trigger={on_trigger}
                                 on_text_change={on_text_change}
+                                on_limit_change={on_limit_change}
                                 on_node_right_click={Some(Callback::from(handle_node_right_click))}
                             />
                         }

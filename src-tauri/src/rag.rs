@@ -10,6 +10,25 @@ pub struct RetrievalResult {
     pub score: f32,
 }
 
+// impl RetrievalResult {
+//     pub fn new(uri: String, text: String, metadata: serde_json::Value, score: f32) -> Self {
+//         let result = Self {
+//             uri: uri.clone(),
+//             text: text.clone(),
+//             metadata: metadata.clone(),
+//             score,
+//         };
+//         eprintln!(
+//             "[RetrievalResult] uri=\"{}\"\n text=\"{}\"\n metadata={}\n score={}\n",
+//             uri,
+//             text,
+//             metadata,
+//             score
+//         );
+//         result
+//     }
+// }
+
 #[derive(Debug, Serialize)]
 struct FindRequest {
     query: String,
@@ -43,17 +62,25 @@ struct OvFindResult {
 pub async fn retrieve(
     virtual_uri: String,
     query: String,
-    top_k: usize,
+    limit: usize,
 ) -> Result<Vec<RetrievalResult>, String> {
+    // eprintln!("[DEBUG retrieve] virtual_uri=\"{}\" query=\"{}\" limit={}", virtual_uri, query, limit);
+
+    // if virtual_uri.is_empty() {
+    //     eprintln!("[ERROR retrieve] virtual_uri is empty! Please set a collection URI like viking://resources/my_collection");
+    //     return Err("virtual_uri is empty. Please set a collection URI in the Retrieval node.".to_string());
+    // }
+
     let client = reqwest::Client::new();
     let request = FindRequest {
         query,
-        target_uri: virtual_uri,
-        limit: top_k,
+        target_uri: virtual_uri.clone(),
+        limit,
     };
 
     let response = client
         .post(&format!("{}/api/v1/search/find", OPENVIKING_BASE_URL))
+        .header("Content-Type", "application/json")
         .json(&request)
         .send()
         .await
@@ -78,14 +105,20 @@ pub async fn retrieve(
         .result
         .resources
         .into_iter()
-        .take(top_k)
-        .map(|r| {
-            RetrievalResult {
-                uri: r.uri.unwrap_or_default(),
-                text: r.abstract_content.unwrap_or_default(),
-                metadata: serde_json::json!({}),
-                score: r.score.unwrap_or(0.0),
-            }
+        .take(limit)
+        // .map(|r| {
+        //     RetrievalResult::new(
+        //         r.uri.unwrap_or_default(),
+        //         r.abstract_content.unwrap_or_default(),
+        //         serde_json::json!({}),
+        //         r.score.unwrap_or(0.0),
+        //     )
+        // })
+        .map(|r| RetrievalResult {
+            uri: r.uri.unwrap_or_default(),
+            text: r.abstract_content.unwrap_or_default(),
+            metadata: serde_json::json!({}),
+            score: r.score.unwrap_or(0.0),
         })
         .collect();
 

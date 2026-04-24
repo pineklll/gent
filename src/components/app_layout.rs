@@ -378,10 +378,33 @@ pub fn AppLayout() -> impl IntoView {
     let handle_text_change = move |node_id: u32, new_text: String| {
         set_nodes.update(|nodes: &mut Vec<NodeState>| {
             if let Some(node) = nodes.iter_mut().find(|n| n.id == node_id) {
-                if let crate::components::canvas::state::NodeVariant::UserInput { text } =
+                match &mut node.variant {
+                    crate::components::canvas::state::NodeVariant::UserInput { text } => {
+                        *text = new_text;
+                    }
+                    crate::components::canvas::state::NodeVariant::Retrieval { virtual_uri, .. } => {
+                        *virtual_uri = new_text;
+                    }
+                    crate::components::canvas::state::NodeVariant::FileInput { path } => {
+                        *path = new_text;
+                    }
+                    crate::components::canvas::state::NodeVariant::Template { template } => {
+                        *template = new_text;
+                    }
+                    _ => {}
+                }
+            }
+        });
+    };
+
+    // Handler for limit changes (Retrieval node)
+    let handle_limit_change = move |node_id: u32, new_limit: usize| {
+        set_nodes.update(|nodes: &mut Vec<NodeState>| {
+            if let Some(node) = nodes.iter_mut().find(|n| n.id == node_id) {
+                if let crate::components::canvas::state::NodeVariant::Retrieval { limit, .. } =
                     &mut node.variant
                 {
-                    *text = new_text;
+                    *limit = new_limit;
                 }
             }
         });
@@ -865,10 +888,10 @@ pub fn AppLayout() -> impl IntoView {
                             .cloned()
                             .unwrap_or_default();
 
-                        let (virtual_uri, top_k) = if let NodeVariant::Retrieval { virtual_uri, query: _, top_k } = retrieval_variant {
-                            (virtual_uri, top_k)
+                        let (virtual_uri, limit) = if let NodeVariant::Retrieval { virtual_uri, limit } = retrieval_variant {
+                            (virtual_uri, limit)
                         } else {
-                            (String::new(), 4)
+                            (String::new(), 10)
                         };
 
                         let mut task = Task::new(exec_node_id, "retrieval", parent_id.clone());
@@ -882,7 +905,7 @@ pub fn AppLayout() -> impl IntoView {
                         let result = call_retrieve(
                             virtual_uri.clone(),
                             query_text.clone(),
-                            top_k,
+                            limit,
                         )
                         .await;
 
@@ -1285,6 +1308,7 @@ pub fn AppLayout() -> impl IntoView {
                         inspector_height={Some(inspector_height.into())}
                         on_trigger={Some(Callback::new(handle_trigger))}
                         on_text_change={Some(Callback::new(move |(node_id, new_text)| handle_text_change(node_id, new_text)))}
+                        on_limit_change={Some(Callback::new(move |(node_id, new_limit)| handle_limit_change(node_id, new_limit)))}
                         on_node_right_click={Some(Callback::new(handle_node_inspect))}
                         on_interaction_start={Some(Callback::new(move |_| begin_undo_suppression()))}
                         on_interaction_end={Some(Callback::new(move |_| end_undo_suppression()))}
