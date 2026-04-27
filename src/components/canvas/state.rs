@@ -40,6 +40,14 @@ pub struct PortWithOffset {
     pub top_offset: f64, // Percentage 0.0 to 1.0
 }
 
+/// Query translation mode
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum QueryTranslationMode {
+    MultiQuery { num_queries: usize },
+    StepBack,
+    RagFusion { k: usize, limit_per_query: usize },
+}
+
 /// Variants for different node types with their specific data
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum NodeVariant {
@@ -96,6 +104,13 @@ pub enum NodeVariant {
         custom_url: String,
     },
     Model,
+    QueryTranslation {
+        mode: QueryTranslationMode,
+        format: String,
+        model_name: String,
+        api_key: String,
+        custom_url: String,
+    },
 }
 
 /// Execution status of a node
@@ -382,6 +397,18 @@ pub fn default_ports_for_type(node_type: &str) -> Vec<Port> {
                 direction: PortDirection::Out,
             },
         ],
+        "query_translation" => vec![
+            Port {
+                name: "query".into(),
+                port_type: PortType::Text,
+                direction: PortDirection::In,
+            },
+            Port {
+                name: "output".into(),
+                port_type: PortType::Text,
+                direction: PortDirection::Out,
+            },
+        ],
         _ => vec![],
     }
 }
@@ -529,6 +556,13 @@ pub fn default_variant_for_type(node_type: &str) -> NodeVariant {
         "model" => NodeVariant::Model,
         "model_config" => NodeVariant::ModelConfig {
             format: "openai".into(),
+            model_name: String::new(),
+            api_key: String::new(),
+            custom_url: String::new(),
+        },
+        "query_translation" => NodeVariant::QueryTranslation {
+            mode: QueryTranslationMode::MultiQuery { num_queries: 3 },
+            format: String::new(),
             model_name: String::new(),
             api_key: String::new(),
             custom_url: String::new(),

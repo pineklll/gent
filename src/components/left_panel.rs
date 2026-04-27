@@ -106,6 +106,12 @@ pub const NODE_TYPES: &[NodeType] = &[
         category: "Agent",
         description: "Holds API configuration for Model node",
     },
+    NodeType {
+        id: "query_translation",
+        name: "Query Translation",
+        category: "Agent",
+        description: "Multi-query, step-back, or RAG-fusion query transformation"
+    },
     // Tool
     NodeType {
         id: "web_search",

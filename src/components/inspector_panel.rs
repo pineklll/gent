@@ -536,5 +536,10 @@ fn InspectorProperties(
                 <span class="property-readonly">"Model node — config comes via port connection"</span>
             </div>
         }.into_any(),
+        NodeVariant::QueryTranslation { .. } => view! {
+            <div class="property-group">
+                <span class="property-readonly">"Query Translation node"</span>
+            </div>
+        }.into_any(),
     }
 }
