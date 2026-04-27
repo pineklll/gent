@@ -1146,9 +1146,16 @@ pub fn AppLayout() -> impl IntoView {
                             QueryTranslationMode::RagFusion { k, limit_per_query } => {
                                 task.add_message("RAG-fusion: generating and fusing multiple queries", TraceLevel::Info);
 
+                                let virtual_uri = connections_snapshot
+                                    .iter()
+                                    .find(|c| c.target_node_id == exec_node_id && c.target_port_name == "virtual_uri")
+                                    .and_then(|c| node_results.get(&c.source_node_id))
+                                    .cloned()
+                                    .unwrap_or_default();
+
                                 let resp = call_rag_fusion(
                                     query_text,
-                                    String::new(),  // virtual_uri - from connections in Task 5
+                                    virtual_uri,
                                     3,
                                     limit_per_query,
                                     k,
