@@ -8,7 +8,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::components::canvas::geometry::is_text_input_keyboard;
 use crate::components::canvas::state::{
     default_ports_for_type, default_variant_for_type, BundledGroup, ConnectionState, NodeState,
-    NodeStatus, NodeVariant, SavedSelection,
+    NodeStatus, NodeVariant, QueryTranslationMode, SavedSelection,
 };
 use crate::components::canvas::Canvas;
 use crate::components::execution_engine::{
@@ -46,6 +46,37 @@ pub struct LlmDefaults {
     pub default_format: Option<String>,
     #[serde(default)]
     pub providers: std::collections::HashMap<String, ProviderConfig>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct MultiQueryResponse {
+    pub queries: Vec<String>,
+}
+
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+pub struct StepBackResponse {
+    pub abstract_query: String,
+    pub original_query: String,
+}
+
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+pub struct RagFusionResponse {
+    pub fused_results: Vec<FusedResult>,
+    pub individual_results: Vec<PerQueryResults>,
+}
+
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+pub struct FusedResult {
+    pub uri: String,
+    pub text: String,
+    pub score: f32,
+    pub source_queries: Vec<String>,
+}
+
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+pub struct PerQueryResults {
+    pub query: String,
+    pub results: Vec<crate::components::execution_engine::RetrievalResult>,
 }
 
 async fn fetch_llm_defaults() -> Result<LlmDefaults, String> {
@@ -161,6 +192,73 @@ async fn call_retrieve(
         serde_wasm_bindgen::from_value(js_value)
             .map_err(|e| format!("deserialization failed: {:?}", e))?;
     Ok(results)
+}
+
+async fn call_multi_query(
+    query: String,
+    num_queries: usize,
+    format: String,
+    model_name: String,
+    api_key: String,
+    custom_url: String,
+) -> Result<MultiQueryResponse, String> {
+    use crate::tauri_invoke;
+    let opts = js_sys::Object::new();
+    js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"num_queries".into(), &JsValue::from_f64(num_queries as f64)).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false);
+    let js_value = tauri_invoke::invoke("multi_query".into(), &opts).await?;
+    serde_wasm_bindgen::from_value(js_value)
+        .map_err(|e| format!("deserialization failed: {:?}", e))
+}
+
+async fn call_step_back(
+    query: String,
+    format: String,
+    model_name: String,
+    api_key: String,
+    custom_url: String,
+) -> Result<StepBackResponse, String> {
+    use crate::tauri_invoke;
+    let opts = js_sys::Object::new();
+    js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false);
+    let js_value = tauri_invoke::invoke("step_back".into(), &opts).await?;
+    serde_wasm_bindgen::from_value(js_value)
+        .map_err(|e| format!("deserialization failed: {:?}", e))
+}
+
+async fn call_rag_fusion(
+    query: String,
+    virtual_uri: String,
+    num_queries: usize,
+    limit_per_query: usize,
+    k: usize,
+    format: String,
+    model_name: String,
+    api_key: String,
+    custom_url: String,
+) -> Result<RagFusionResponse, String> {
+    use crate::tauri_invoke;
+    let opts = js_sys::Object::new();
+    js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"virtual_uri".into(), &virtual_uri.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"num_queries".into(), &JsValue::from_f64(num_queries as f64)).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"limit_per_query".into(), &JsValue::from_f64(limit_per_query as f64)).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"k".into(), &JsValue::from_f64(k as f64)).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false);
+    js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false);
+    let js_value = tauri_invoke::invoke("rag_fusion".into(), &opts).await?;
+    serde_wasm_bindgen::from_value(js_value)
+        .map_err(|e| format!("deserialization failed: {:?}", e))
 }
 
 /// Main application layout with left panel, canvas, and right panel
@@ -931,6 +1029,114 @@ pub fn AppLayout() -> impl IntoView {
                                 task.add_message(&format!("Retrieval error: {}", e), TraceLevel::Error);
                             }
                         }
+                        exec.tasks.push(task);
+                    } else if node.node_type == "query_translation" {
+                        let variant = node.variant.clone();
+                        let query_text = connections_snapshot
+                            .iter()
+                            .find(|c| c.target_node_id == exec_node_id && c.target_port_name == "query")
+                            .and_then(|c| node_results.get(&c.source_node_id))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let (mode, format, model_name, api_key, custom_url) = if let NodeVariant::QueryTranslation {
+                            mode, format, model_name, api_key, custom_url
+                        } = variant {
+                            (mode, format, model_name, api_key, custom_url)
+                        } else {
+                            return;
+                        };
+
+                        let mut task = Task::new(exec_node_id, "query_translation", parent_id.clone());
+                        task.status = TaskStatus::Running;
+                        task.started_at = Some(Timestamp::now());
+
+                        let output_json: String;
+
+                        match mode {
+                            QueryTranslationMode::MultiQuery { num_queries } => {
+                                task.add_message(&format!("Multi-query: generating {} variations", num_queries), TraceLevel::Info);
+
+                                let resp = call_multi_query(
+                                    query_text,
+                                    num_queries,
+                                    format,
+                                    model_name,
+                                    api_key,
+                                    custom_url,
+                                ).await;
+
+                                match resp {
+                                    Ok(r) => {
+                                        output_json = serde_json::to_string(&r.queries).unwrap_or_default();
+                                        task.status = TaskStatus::Complete;
+                                        task.add_message(&format!("Generated {} queries", r.queries.len()), TraceLevel::Info);
+                                    }
+                                    Err(e) => {
+                                        task.status = TaskStatus::Error;
+                                        task.add_message(&format!("Multi-query error: {}", e), TraceLevel::Error);
+                                        output_json = String::new();
+                                    }
+                                }
+                            }
+                            QueryTranslationMode::StepBack => {
+                                task.add_message("Step-back: generating abstract query", TraceLevel::Info);
+
+                                let resp = call_step_back(
+                                    query_text,
+                                    format,
+                                    model_name,
+                                    api_key,
+                                    custom_url,
+                                ).await;
+
+                                match resp {
+                                    Ok(r) => {
+                                        output_json = serde_json::to_string(&r).unwrap_or_default();
+                                        task.status = TaskStatus::Complete;
+                                        task.add_message(&format!("Abstract: {}", r.abstract_query), TraceLevel::Info);
+                                    }
+                                    Err(e) => {
+                                        task.status = TaskStatus::Error;
+                                        task.add_message(&format!("Step-back error: {}", e), TraceLevel::Error);
+                                        output_json = String::new();
+                                    }
+                                }
+                            }
+                            QueryTranslationMode::RagFusion { k, limit_per_query } => {
+                                task.add_message("RAG-fusion: generating and fusing multiple queries", TraceLevel::Info);
+
+                                let resp = call_rag_fusion(
+                                    query_text,
+                                    String::new(),  // virtual_uri - from connections in Task 5
+                                    3,
+                                    limit_per_query,
+                                    k,
+                                    format,
+                                    model_name,
+                                    api_key,
+                                    custom_url,
+                                ).await;
+
+                                match resp {
+                                    Ok(r) => {
+                                        output_json = serde_json::to_string(&r).unwrap_or_default();
+                                        task.status = TaskStatus::Complete;
+                                        task.add_message(&format!("RAG-fusion: {} fused results from {} queries",
+                                            r.fused_results.len(), r.individual_results.len()), TraceLevel::Info);
+                                    }
+                                    Err(e) => {
+                                        task.status = TaskStatus::Error;
+                                        task.add_message(&format!("RAG-fusion error: {}", e), TraceLevel::Error);
+                                        output_json = String::new();
+                                    }
+                                }
+                            }
+                        }
+
+                        task.finished_at = Some(Timestamp::now());
+                        task.result = Some(output_json.clone());
+                        node_results.insert(exec_node_id, output_json);
                         exec.tasks.push(task);
                     } else {
                         let (mut task, result) = execute_node_sync(node, &upstream, parent_id);
