@@ -1,4 +1,4 @@
-use crate::components::canvas::state::{NodeVariant, PortDirection, PortType, PortWithOffset};
+use crate::components::canvas::state::{NodeVariant, PortDirection, PortType, PortWithOffset, QueryTranslationMode};
 use leptos::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -229,6 +229,30 @@ fn render_variant_body(
         NodeVariant::Model => view! {
             <div class="node-variant-fields" />
         }.into_any(),
+        NodeVariant::QueryTranslation { mode, format, model_name, api_key, custom_url } => {
+            let mode_str = match mode {
+                QueryTranslationMode::MultiQuery { num_queries } => format!("multi_query ({} queries)", num_queries),
+                QueryTranslationMode::StepBack => "step_back".to_string(),
+                QueryTranslationMode::RagFusion { k, limit_per_query } => format!("rag_fusion (k={}, limit={})", k, limit_per_query),
+            };
+            view! {
+                <div class="node-variant-fields">
+                    <div class="node-variant-field">
+                        <label>"Mode"</label>
+                        <span class="node-variant-label">{mode_str}</span>
+                    </div>
+                    <div class="node-variant-field">
+                        <label>"Model"</label>
+                        <input
+                            type="text"
+                            class="node-variant-input small"
+                            value={model_name.clone()}
+                            placeholder="gpt-4o-mini"
+                        />
+                    </div>
+                </div>
+            }.into_any()
+        }
         // Trigger variant is handled separately in the GraphNode view
         _ => view! { <div /> }.into_any(),
     }
