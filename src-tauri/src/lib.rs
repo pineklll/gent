@@ -9,6 +9,7 @@ use std::sync::Arc;
 mod config;
 mod llm;
 mod plugins;
+mod query_translation;
 mod rag;
 pub mod scripts;
 
@@ -72,6 +73,62 @@ async fn retrieve(
     rag::retrieve(virtual_uri, query, top_k).await
 }
 
+#[tauri::command(rename_all = "snake_case")]
+async fn multi_query(
+    query: String,
+    num_queries: usize,
+    format: String,
+    model_name: String,
+    api_key: String,
+    custom_url: String,
+) -> Result<query_translation::MultiQueryResponse, String> {
+    let config = llm::LlmConfig {
+        format,
+        model_name,
+        api_key,
+        custom_url,
+    };
+    query_translation::multi_query(config, query, num_queries).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn step_back(
+    query: String,
+    format: String,
+    model_name: String,
+    api_key: String,
+    custom_url: String,
+) -> Result<query_translation::StepBackResponse, String> {
+    let config = llm::LlmConfig {
+        format,
+        model_name,
+        api_key,
+        custom_url,
+    };
+    query_translation::step_back(config, query).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn rag_fusion(
+    query: String,
+    virtual_uri: String,
+    num_queries: usize,
+    limit_per_query: usize,
+    k: usize,
+    format: String,
+    model_name: String,
+    api_key: String,
+    custom_url: String,
+) -> Result<query_translation::RagFusionResponse, String> {
+    let config = llm::LlmConfig {
+        format,
+        model_name,
+        api_key,
+        custom_url,
+    };
+    query_translation::rag_fusion(config, query, virtual_uri, num_queries, limit_per_query, k).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Load XDG config (~/.config/gent/config.toml)
@@ -112,6 +169,9 @@ pub fn run() {
             export_graph,
             // RAG commands
             retrieve,
+            multi_query,
+            step_back,
+            rag_fusion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
