@@ -1143,7 +1143,7 @@ pub fn AppLayout() -> impl IntoView {
                                     }
                                 }
                             }
-                            QueryTranslationMode::RagFusion { k, limit_per_query } => {
+                            QueryTranslationMode::RagFusion { num_queries, k, limit_per_query } => {
                                 task.add_message("RAG-fusion: generating and fusing multiple queries", TraceLevel::Info);
 
                                 let virtual_uri = connections_snapshot
@@ -1156,7 +1156,7 @@ pub fn AppLayout() -> impl IntoView {
                                 let resp = call_rag_fusion(
                                     query_text,
                                     virtual_uri,
-                                    3,
+                                    num_queries,
                                     limit_per_query,
                                     k,
                                     format,

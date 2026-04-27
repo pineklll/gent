@@ -45,7 +45,7 @@ pub struct PortWithOffset {
 pub enum QueryTranslationMode {
     MultiQuery { num_queries: usize },
     StepBack,
-    RagFusion { k: usize, limit_per_query: usize },
+    RagFusion { num_queries: usize, k: usize, limit_per_query: usize },
 }
 
 /// Variants for different node types with their specific data

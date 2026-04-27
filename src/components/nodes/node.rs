@@ -233,7 +233,7 @@ fn render_variant_body(
             let mode_str = match mode {
                 QueryTranslationMode::MultiQuery { num_queries } => format!("multi_query ({} queries)", num_queries),
                 QueryTranslationMode::StepBack => "step_back".to_string(),
-                QueryTranslationMode::RagFusion { k, limit_per_query } => format!("rag_fusion (k={}, limit={})", k, limit_per_query),
+                QueryTranslationMode::RagFusion { num_queries, k, limit_per_query } => format!("rag_fusion (n={}, k={}, limit={})", num_queries, k, limit_per_query),
             };
             view! {
                 <div class="node-variant-fields">
