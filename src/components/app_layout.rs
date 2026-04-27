@@ -204,12 +204,24 @@ async fn call_multi_query(
 ) -> Result<MultiQueryResponse, String> {
     use crate::tauri_invoke;
     let opts = js_sys::Object::new();
-    js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"num_queries".into(), &JsValue::from_f64(num_queries as f64)).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false);
+    if !js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false) {
+        return Err("Failed to set query".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"num_queries".into(), &JsValue::from_f64(num_queries as f64)).unwrap_or(false) {
+        return Err("Failed to set num_queries".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false) {
+        return Err("Failed to set format".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false) {
+        return Err("Failed to set model_name".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false) {
+        return Err("Failed to set api_key".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false) {
+        return Err("Failed to set custom_url".to_string());
+    }
     let js_value = tauri_invoke::invoke("multi_query".into(), &opts).await?;
     serde_wasm_bindgen::from_value(js_value)
         .map_err(|e| format!("deserialization failed: {:?}", e))
@@ -224,11 +236,21 @@ async fn call_step_back(
 ) -> Result<StepBackResponse, String> {
     use crate::tauri_invoke;
     let opts = js_sys::Object::new();
-    js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false);
+    if !js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false) {
+        return Err("Failed to set query".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false) {
+        return Err("Failed to set format".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false) {
+        return Err("Failed to set model_name".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false) {
+        return Err("Failed to set api_key".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false) {
+        return Err("Failed to set custom_url".to_string());
+    }
     let js_value = tauri_invoke::invoke("step_back".into(), &opts).await?;
     serde_wasm_bindgen::from_value(js_value)
         .map_err(|e| format!("deserialization failed: {:?}", e))
@@ -247,15 +269,33 @@ async fn call_rag_fusion(
 ) -> Result<RagFusionResponse, String> {
     use crate::tauri_invoke;
     let opts = js_sys::Object::new();
-    js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"virtual_uri".into(), &virtual_uri.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"num_queries".into(), &JsValue::from_f64(num_queries as f64)).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"limit_per_query".into(), &JsValue::from_f64(limit_per_query as f64)).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"k".into(), &JsValue::from_f64(k as f64)).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false);
-    js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false);
+    if !js_sys::Reflect::set(&opts, &"query".into(), &query.into()).unwrap_or(false) {
+        return Err("Failed to set query".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"virtual_uri".into(), &virtual_uri.into()).unwrap_or(false) {
+        return Err("Failed to set virtual_uri".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"num_queries".into(), &JsValue::from_f64(num_queries as f64)).unwrap_or(false) {
+        return Err("Failed to set num_queries".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"limit_per_query".into(), &JsValue::from_f64(limit_per_query as f64)).unwrap_or(false) {
+        return Err("Failed to set limit_per_query".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"k".into(), &JsValue::from_f64(k as f64)).unwrap_or(false) {
+        return Err("Failed to set k".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"format".into(), &format.into()).unwrap_or(false) {
+        return Err("Failed to set format".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"model_name".into(), &model_name.into()).unwrap_or(false) {
+        return Err("Failed to set model_name".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"api_key".into(), &api_key.into()).unwrap_or(false) {
+        return Err("Failed to set api_key".to_string());
+    }
+    if !js_sys::Reflect::set(&opts, &"custom_url".into(), &custom_url.into()).unwrap_or(false) {
+        return Err("Failed to set custom_url".to_string());
+    }
     let js_value = tauri_invoke::invoke("rag_fusion".into(), &opts).await?;
     serde_wasm_bindgen::from_value(js_value)
         .map_err(|e| format!("deserialization failed: {:?}", e))
