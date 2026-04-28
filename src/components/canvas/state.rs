@@ -104,6 +104,10 @@ pub enum NodeVariant {
         custom_url: String,
     },
     Model,
+    ReActLoop {
+        action_type: String,   // "retrieval" | "web_search" | "code_exec"
+        max_iterations: u32,   // Safety limit, default 5
+    },
     QueryTranslation {
         mode: QueryTranslationMode,
         format: String,
@@ -419,6 +423,14 @@ pub fn default_ports_for_type(node_type: &str) -> Vec<Port> {
                 direction: PortDirection::Out,
             },
         ],
+        "react_loop" => vec![
+            Port { name: "input".into(), port_type: PortType::Text, direction: PortDirection::In },
+            Port { name: "config".into(), port_type: PortType::Text, direction: PortDirection::In },
+            Port { name: "action_trigger".into(), port_type: PortType::Trigger, direction: PortDirection::Out },
+            Port { name: "action_result".into(), port_type: PortType::Text, direction: PortDirection::In },
+            Port { name: "done".into(), port_type: PortType::Trigger, direction: PortDirection::Out },
+            Port { name: "output".into(), port_type: PortType::Text, direction: PortDirection::Out },
+        ],
         _ => vec![],
     }
 }
@@ -576,6 +588,10 @@ pub fn default_variant_for_type(node_type: &str) -> NodeVariant {
             model_name: String::new(),
             api_key: String::new(),
             custom_url: String::new(),
+        },
+        "react_loop" => NodeVariant::ReActLoop {
+            action_type: "retrieval".into(),
+            max_iterations: 5,
         },
         _ => NodeVariant::Trigger,
     }
