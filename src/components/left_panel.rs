@@ -95,6 +95,12 @@ pub const NODE_TYPES: &[NodeType] = &[
         description: "Executes tasks",
     },
     NodeType {
+        id: "react_loop",
+        name: "ReAct Loop",
+        category: "Agent",
+        description: "LLM-controlled reasoning loop with actions",
+    },
+    NodeType {
         id: "model",
         name: "Model",
         category: "Agent",
