@@ -264,6 +264,46 @@ fn render_variant_body(
                 </div>
             }.into_any()
         }
+        NodeVariant::ReActLoop { action_type, max_iterations } => {
+            let action_type_cb = on_text_change.clone();
+            let max_iter_cb = on_limit_change.clone();
+            view! {
+                <div class="node-variant-fields">
+                    <div class="node-variant-field">
+                        <label>"Action"</label>
+                        <select class="node-variant-select"
+                            on:change={move |ev| {
+                                let new_action = event_target_value(&ev);
+                                if let Some(callback) = &action_type_cb {
+                                    callback.run((node_id, new_action));
+                                }
+                            }}
+                        >
+                            <option value="retrieval" selected={action_type == "retrieval"}>"Retrieval"</option>
+                            <option value="web_search" selected={action_type == "web_search"} disabled>"Web Search (future)"</option>
+                            <option value="code_exec" selected={action_type == "code_exec"} disabled>"Code Exec (future)"</option>
+                        </select>
+                    </div>
+                    <div class="node-variant-field">
+                        <label>"Max Iterations"</label>
+                        <input
+                            type="number"
+                            class="node-variant-input small"
+                            value={*max_iterations as f64}
+                            min="1"
+                            max="20"
+                            on:change={move |ev| {
+                                if let Ok(new_value) = event_target_value(&ev).parse::<usize>() {
+                                    if let Some(callback) = &max_iter_cb {
+                                        callback.run((node_id, new_value));
+                                    }
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
+            }.into_any()
+        }
         // Trigger variant is handled separately in the GraphNode view
         _ => view! { <div /> }.into_any(),
     }
