@@ -548,6 +548,19 @@ pub fn AppLayout() -> impl IntoView {
         });
     };
 
+    // Handler for query translation mode changes
+    let handle_mode_change = move |node_id: u32, new_mode: crate::components::canvas::state::QueryTranslationMode| {
+        set_nodes.update(|nodes: &mut Vec<NodeState>| {
+            if let Some(node) = nodes.iter_mut().find(|n| n.id == node_id) {
+                if let crate::components::canvas::state::NodeVariant::QueryTranslation { mode, .. } =
+                    &mut node.variant
+                {
+                    *mode = new_mode;
+                }
+            }
+        });
+    };
+
     // Toast helper function
     let add_toast = {
         let set_toasts = set_toasts.clone();
@@ -1079,10 +1092,32 @@ pub fn AppLayout() -> impl IntoView {
                             .cloned()
                             .unwrap_or_default();
 
+                        // Read config from connected ModelConfig node, or fall back to variant fields
                         let (mode, format, model_name, api_key, custom_url) = if let NodeVariant::QueryTranslation {
-                            mode, format, model_name, api_key, custom_url
-                        } = variant {
-                            (mode, format, model_name, api_key, custom_url)
+                            mode, ..
+                        } = variant.clone() {
+                            let config_json = connections_snapshot
+                                .iter()
+                                .find(|c| c.target_node_id == exec_node_id && c.target_port_name == "config")
+                                .and_then(|c| node_results.get(&c.source_node_id))
+                                .cloned();
+                            if let Some(config_str) = config_json {
+                                (
+                                    mode,
+                                    get_json_str(&config_str, "format"),
+                                    get_json_str(&config_str, "model_name"),
+                                    get_json_str(&config_str, "api_key"),
+                                    get_json_str(&config_str, "custom_url"),
+                                )
+                            } else {
+                                if let NodeVariant::QueryTranslation {
+                                    mode, format, model_name, api_key, custom_url
+                                } = variant {
+                                    (mode, format, model_name, api_key, custom_url)
+                                } else {
+                                    return;
+                                }
+                            }
                         } else {
                             return;
                         };
@@ -1562,6 +1597,7 @@ pub fn AppLayout() -> impl IntoView {
                         on_trigger={Some(Callback::new(handle_trigger))}
                         on_text_change={Some(Callback::new(move |(node_id, new_text)| handle_text_change(node_id, new_text)))}
                         on_limit_change={Some(Callback::new(move |(node_id, new_limit)| handle_limit_change(node_id, new_limit)))}
+                        on_mode_change={Some(Callback::new(move |(node_id, new_mode)| handle_mode_change(node_id, new_mode)))}
                         on_node_right_click={Some(Callback::new(handle_node_inspect))}
                         on_interaction_start={Some(Callback::new(move |_| begin_undo_suppression()))}
                         on_interaction_end={Some(Callback::new(move |_| end_undo_suppression()))}

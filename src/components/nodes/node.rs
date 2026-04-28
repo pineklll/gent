@@ -10,6 +10,7 @@ fn render_variant_body(
     node_id: u32,
     on_text_change: &Option<Callback<(u32, String)>>,
     on_limit_change: &Option<Callback<(u32, usize)>>,
+    on_mode_change: &Option<Callback<(u32, QueryTranslationMode)>>,
 ) -> impl IntoView {
     match variant {
         NodeVariant::UserInput { text } => {
@@ -229,26 +230,36 @@ fn render_variant_body(
         NodeVariant::Model => view! {
             <div class="node-variant-fields" />
         }.into_any(),
-        NodeVariant::QueryTranslation { mode, format, model_name, api_key, custom_url } => {
-            let mode_str = match mode {
-                QueryTranslationMode::MultiQuery { num_queries } => format!("multi_query ({} queries)", num_queries),
-                QueryTranslationMode::StepBack => "step_back".to_string(),
-                QueryTranslationMode::RagFusion { num_queries, k, limit_per_query } => format!("rag_fusion (n={}, k={}, limit={})", num_queries, k, limit_per_query),
+        NodeVariant::QueryTranslation { mode, .. } => {
+            let mode_cb = on_mode_change.clone();
+            let current_mode = match mode {
+                QueryTranslationMode::MultiQuery { .. } => "multi_query",
+                QueryTranslationMode::StepBack => "step_back",
+                QueryTranslationMode::RagFusion { .. } => "rag_fusion",
             };
             view! {
                 <div class="node-variant-fields">
                     <div class="node-variant-field">
                         <label>"Mode"</label>
-                        <span class="node-variant-label">{mode_str}</span>
-                    </div>
-                    <div class="node-variant-field">
-                        <label>"Model"</label>
-                        <input
-                            type="text"
-                            class="node-variant-input small"
-                            value={model_name.clone()}
-                            placeholder="gpt-4o-mini"
-                        />
+                        <select
+                            class="node-variant-select"
+                            on:change={move |ev| {
+                                let new_mode = event_target_value(&ev);
+                                let new_query_mode = match new_mode.as_str() {
+                                    "multi_query" => QueryTranslationMode::MultiQuery { num_queries: 3 },
+                                    "step_back" => QueryTranslationMode::StepBack,
+                                    "rag_fusion" => QueryTranslationMode::RagFusion { num_queries: 3, k: 60, limit_per_query: 10 },
+                                    _ => return,
+                                };
+                                if let Some(cb) = &mode_cb {
+                                    cb.run((node_id, new_query_mode));
+                                }
+                            }}
+                        >
+                            <option value="multi_query" selected={current_mode == "multi_query"}>"Multi-Query"</option>
+                            <option value="step_back" selected={current_mode == "step_back"}>"Step-Back"</option>
+                            <option value="rag_fusion" selected={current_mode == "rag_fusion"}>"RAG-Fusion"</option>
+                        </select>
                     </div>
                 </div>
             }.into_any()
@@ -280,6 +291,8 @@ pub fn GraphNode(
     #[prop(default = None)] on_text_change: Option<Callback<(u32, String)>>,
     /// Callback when limit changes in a Retrieval node
     #[prop(default = None)] on_limit_change: Option<Callback<(u32, usize)>>,
+    /// Callback when query translation mode changes
+    #[prop(default = None)] on_mode_change: Option<Callback<(u32, QueryTranslationMode)>>,
     /// Callback when node is right-clicked for inspection
     /// Args: (node_id, is_double_click)
     #[prop(default = None)]
@@ -374,7 +387,7 @@ pub fn GraphNode(
                             "Run"
                         </button>
                     }.into_any(),
-                    _ => render_variant_body(&variant, node_id, &on_text_change, &on_limit_change).into_any(),
+                    _ => render_variant_body(&variant, node_id, &on_text_change, &on_limit_change, &on_mode_change).into_any(),
                 }}
             </div>
             {/* Dynamic input ports */}

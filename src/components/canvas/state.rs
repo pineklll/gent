@@ -409,6 +409,11 @@ pub fn default_ports_for_type(node_type: &str) -> Vec<Port> {
                 direction: PortDirection::In,
             },
             Port {
+                name: "config".into(),
+                port_type: PortType::Text,
+                direction: PortDirection::In,
+            },
+            Port {
                 name: "output".into(),
                 port_type: PortType::Text,
                 direction: PortDirection::Out,

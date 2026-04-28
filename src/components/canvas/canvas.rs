@@ -7,7 +7,7 @@ use crate::components::canvas::geometry::{
 };
 use crate::components::canvas::state::{
     compute_port_offsets, get_output_ports, get_port_canvas_position, ConnectionState,
-    DraggingConnection, NodeState, Port, PortDirection, PortType,
+    DraggingConnection, NodeState, Port, PortDirection, PortType, QueryTranslationMode,
 };
 use crate::components::canvas::wires::draw_connections;
 use crate::components::nodes::node::GraphNode;
@@ -71,6 +71,9 @@ pub fn Canvas(
     /// Callback when limit changes in a Retrieval node
     #[prop(default = None)]
     on_limit_change: Option<Callback<(u32, usize)>>,
+    /// Callback when query translation mode changes
+    #[prop(default = None)]
+    on_mode_change: Option<Callback<(u32, QueryTranslationMode)>>,
     /// Callback when a node is right-clicked for inspection
     /// Args: (node_id, is_double_click)
     #[prop(default = None)]
@@ -955,6 +958,7 @@ pub fn Canvas(
                                 on_trigger={on_trigger}
                                 on_text_change={on_text_change}
                                 on_limit_change={on_limit_change}
+                                on_mode_change={on_mode_change}
                                 on_node_right_click={Some(Callback::from(handle_node_right_click))}
                             />
                         }
