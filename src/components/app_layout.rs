@@ -25,6 +25,23 @@ use crate::components::save_load::{
 use crate::components::toast::{Toast, ToastContainer, ToastType};
 use crate::components::undo::{GraphSnapshot, UndoManager};
 
+const REACT_PROMPT_TEMPLATE: &str = r#"Answer the following questions as best you can. You have access to the following tools:
+
+- retrieval: Query a vector database. Input: {"virtual_uri": "...", "query": "...", "limit": N}
+
+Use the following format:
+
+Question: the input question you must answer
+{history}
+Thought: you should always think about what to do
+Action: the action to take (must be one of: retrieval, FINAL)
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+
+When you know the final answer, output:
+FINAL: your final answer here"#;
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct LlmOutput {
     pub text: String,
@@ -1220,6 +1237,248 @@ pub fn AppLayout() -> impl IntoView {
                         task.result = Some(output_json.clone());
                         node_results.insert(exec_node_id, output_json);
                         exec.tasks.push(task);
+                    } else if node.node_type == "react_loop" {
+                        let variant = node.variant.clone();
+                        let (action_type, max_iterations) = if let NodeVariant::ReActLoop { action_type, max_iterations } = variant {
+                            (action_type, max_iterations)
+                        } else {
+                            return;
+                        };
+
+                        let input_text = connections_snapshot
+                            .iter()
+                            .find(|c| c.target_node_id == exec_node_id && c.target_port_name == "input")
+                            .and_then(|c| node_results.get(&c.source_node_id))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let config_json = connections_snapshot
+                            .iter()
+                            .find(|c| c.target_node_id == exec_node_id && c.target_port_name == "config")
+                            .and_then(|c| node_results.get(&c.source_node_id))
+                            .cloned()
+                            .unwrap_or_else(|| r#"{"format":"openai","model_name":"","api_key":"","custom_url":""}"#.to_string());
+
+                        let config = crate::components::canvas::state::ModelConfig {
+                            format: get_json_str(&config_json, "format"),
+                            model_name: get_json_str(&config_json, "model_name"),
+                            api_key: get_json_str(&config_json, "api_key"),
+                            custom_url: get_json_str(&config_json, "custom_url"),
+                        };
+
+                        let mut loop_task = Task::new(exec_node_id, "react_loop", parent_id.clone());
+                        loop_task.status = TaskStatus::Running;
+                        loop_task.started_at = Some(Timestamp::now());
+                        loop_task.add_message(&format!("ReAct Loop starting: action_type={}, max_iter={}", action_type, max_iterations), TraceLevel::Info);
+
+                        let mut history = String::new();
+                        let mut final_answer: Option<String> = None;
+                        let mut iterations = 0;
+
+                        // ReAct iteration loop
+                        while iterations < max_iterations && final_answer.is_none() {
+                            iterations += 1;
+                            loop_task.add_message(&format!("ReAct iteration {}/{}", iterations, max_iterations), TraceLevel::Info);
+
+                            // Build prompt
+                            let prompt = format!(
+                                "{}\n\nQuestion: {}\n{history}\nThought:",
+                                REACT_PROMPT_TEMPLATE, input_text
+                            );
+
+                            // Call LLM
+                            let llm_result = call_llm_complete(
+                                config.format.clone(),
+                                config.model_name.clone(),
+                                config.api_key.clone(),
+                                config.custom_url.clone(),
+                                prompt,
+                                1.0,
+                            )
+                            .await;
+
+                            let llm_output = match llm_result {
+                                Ok(output) => output.text,
+                                Err(e) => {
+                                    loop_task.add_message(&format!("LLM error: {}", e), TraceLevel::Error);
+                                    format!("Error: LLM call failed: {}", e)
+                                }
+                            };
+
+                            loop_task.add_message(&format!("LLM output: {}", llm_output), TraceLevel::Debug);
+
+                            // Parse LLM output
+                            if llm_output.starts_with("FINAL:") {
+                                final_answer = Some(llm_output.trim_start_matches("FINAL:").trim().to_string());
+                                loop_task.add_message(&format!("FINAL answer: {}", final_answer.as_ref().unwrap()), TraceLevel::Info);
+                            } else if llm_output.contains("Action:") && llm_output.contains("Action Input:") {
+                                // Extract action and params
+                                let action_start = llm_output.find("Action:").map(|i| i + 7).unwrap_or(0);
+                                let action_end = llm_output.find('\n').unwrap_or(llm_output.len());
+                                let action = llm_output[action_start..action_end].trim().to_string();
+
+                                let input_start = llm_output.find("Action Input:").map(|i| i + 12).unwrap_or(0);
+                                let input_end = llm_output[input_start..].find('\n').map(|i| input_start + i).unwrap_or(llm_output.len());
+                                let action_input = llm_output[input_start..input_end].trim().to_string();
+
+                                loop_task.add_message(&format!("Action: {} with input: {}", action, action_input), TraceLevel::Info);
+
+                                // Execute action via subgraph
+                                if action == "retrieval" {
+                                    // Fire action_trigger to connected retrieval node
+                                    let trigger_conn = connections_snapshot
+                                        .iter()
+                                        .find(|c| c.source_node_id == exec_node_id && c.source_port_name == "action_trigger");
+
+                                    if let Some(trigger_conn) = trigger_conn {
+                                        let target_node_id = trigger_conn.target_node_id;
+                                        let target_port = &trigger_conn.target_port_name;
+
+                                        // Insert action_input as the query for the retrieval node
+                                        node_results.insert(target_node_id, action_input.clone());
+
+                                        // Find and execute the retrieval node downstream
+                                        let retrieval_order = execute_downstream_order(&nodes_snapshot, &connections_snapshot, target_node_id);
+
+                                        for retrieval_node_id in retrieval_order {
+                                            if retrieval_node_id == target_node_id {
+                                                continue;
+                                            }
+                                            if let Some(ret_node) = nodes_snapshot.iter().find(|n| n.id == retrieval_node_id) {
+                                                let upstream_ids = get_upstream_nodes(&connections_snapshot, retrieval_node_id);
+                                                let upstream: HashMap<u32, String> = upstream_ids
+                                                    .into_iter()
+                                                    .filter_map(|id| node_results.get(&id).map(|r| (id, r.clone())))
+                                                    .collect();
+
+                                                if ret_node.node_type == "retrieval" {
+                                                    let query_text = upstream.values().next().cloned().unwrap_or_default();
+                                                    let (virtual_uri, limit) = if let NodeVariant::Retrieval { virtual_uri, limit } = &ret_node.variant {
+                                                        (virtual_uri.clone(), *limit)
+                                                    } else {
+                                                        (String::new(), 10)
+                                                    };
+
+                                                    let result = call_retrieve(virtual_uri, query_text, limit).await;
+                                                    let observation = match result {
+                                                        Ok(results) => results.iter().map(|r| r.text.clone()).collect::<Vec<_>>().join("\n---\n"),
+                                                        Err(e) => format!("Error: {}", e),
+                                                    };
+
+                                                    node_results.insert(retrieval_node_id, observation.clone());
+                                                    loop_task.add_message(&format!("Observation: {}", observation), TraceLevel::Info);
+
+                                                    // Append to history
+                                                    history.push_str(&format!(
+                                                        "Thought: {}\nAction: {}\nAction Input: {}\nObservation: {}\n",
+                                                        llm_output, action, action_input, observation
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        loop_task.add_message("No action_trigger connection - cannot execute action", TraceLevel::Warn);
+                                        history.push_str(&format!(
+                                            "Thought: {}\nAction: {}\nAction Input: {}\nObservation: Error: no action_trigger connection\n",
+                                            llm_output, action, action_input
+                                        ));
+                                    }
+                                } else if action == "web_search" {
+                                    loop_task.add_message("web_search not yet implemented", TraceLevel::Warn);
+                                    history.push_str(&format!(
+                                        "Thought: {}\nAction: {}\nAction Input: {}\nObservation: Error: web_search not implemented\n",
+                                        llm_output, action, action_input
+                                    ));
+                                } else if action == "code_exec" {
+                                    loop_task.add_message("code_exec not yet implemented", TraceLevel::Warn);
+                                    history.push_str(&format!(
+                                        "Thought: {}\nAction: {}\nAction Input: {}\nObservation: Error: code_exec not implemented\n",
+                                        llm_output, action, action_input
+                                    ));
+                                } else {
+                                    loop_task.add_message(&format!("Unknown action type: {}", action), TraceLevel::Warn);
+                                    history.push_str(&format!(
+                                        "Thought: {}\nAction: {}\nAction Input: {}\nObservation: Error: unknown action type\n",
+                                        llm_output, action, action_input
+                                    ));
+                                }
+                            } else {
+                                // Couldn't parse - treat as thought
+                                loop_task.add_message("Could not parse LLM output as Action or FINAL", TraceLevel::Warn);
+                                history.push_str(&format!("Thought: {}\n", llm_output));
+                            }
+                        }
+
+                        if final_answer.is_none() {
+                            loop_task.add_message("Max iterations reached without FINAL answer", TraceLevel::Warn);
+                            final_answer = Some("Max iterations reached without producing a final answer.".to_string());
+                        }
+
+                        loop_task.status = TaskStatus::Complete;
+                        loop_task.finished_at = Some(Timestamp::now());
+                        loop_task.result = final_answer.clone();
+                        node_results.insert(exec_node_id, final_answer.unwrap());
+
+                        // Fire done trigger
+                        let done_conn = connections_snapshot
+                            .iter()
+                            .find(|c| c.source_node_id == exec_node_id && c.source_port_name == "done");
+                        if let Some(done_conn) = done_conn {
+                            let done_target = done_conn.target_node_id;
+                            loop_task.add_message(&format!("Firing done trigger to node {}", done_target), TraceLevel::Info);
+
+                            // Execute downstream from done trigger
+                            let done_order = execute_downstream_order(&nodes_snapshot, &connections_snapshot, done_target);
+                            for done_node_id in done_order {
+                                if done_node_id == done_target {
+                                    continue;
+                                }
+                                if let Some(done_node) = nodes_snapshot.iter().find(|n| n.id == done_node_id) {
+                                    let upstream_ids = get_upstream_nodes(&connections_snapshot, done_node_id);
+                                    let upstream: HashMap<u32, String> = upstream_ids
+                                        .into_iter()
+                                        .filter_map(|id| node_results.get(&id).map(|r| (id, r.clone())))
+                                        .collect();
+                                    if done_node.node_type == "model" {
+                                        // Handle model call for done trigger downstream - similar to existing model handling
+                                        let config_json = connections_snapshot
+                                            .iter()
+                                            .find(|c| c.target_node_id == done_node_id && c.target_port_name == "config")
+                                            .and_then(|c| node_results.get(&c.source_node_id))
+                                            .cloned()
+                                            .unwrap_or_else(|| r#"{"format":"openai","model_name":"","api_key":"","custom_url":""}"#.to_string());
+
+                                        let prompt_text = connections_snapshot
+                                            .iter()
+                                            .find(|c| c.target_node_id == done_node_id && c.target_port_name == "prompt")
+                                            .and_then(|c| node_results.get(&c.source_node_id))
+                                            .cloned()
+                                            .unwrap_or_default();
+
+                                        let config = crate::components::canvas::state::ModelConfig {
+                                            format: get_json_str(&config_json, "format"),
+                                            model_name: get_json_str(&config_json, "model_name"),
+                                            api_key: get_json_str(&config_json, "api_key"),
+                                            custom_url: get_json_str(&config_json, "custom_url"),
+                                        };
+
+                                        let temperature = 1.0;
+                                        let llm_result = call_llm_complete(config.format, config.model_name, config.api_key, config.custom_url, prompt_text, temperature).await;
+
+                                        match llm_result {
+                                            Ok(output) => {
+                                                if output.error.is_empty() {
+                                                    node_results.insert(done_node_id, output.text);
+                                                }
+                                            }
+                                            Err(_) => {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        exec.tasks.push(loop_task);
                     } else {
                         let (mut task, result) = execute_node_sync(node, &upstream, parent_id);
                         if task.messages.len() == 1 {

@@ -541,5 +541,10 @@ fn InspectorProperties(
                 <span class="property-readonly">"Query Translation node"</span>
             </div>
         }.into_any(),
+        NodeVariant::ReActLoop { .. } => view! {
+            <div class="property-group">
+                <span class="property-readonly">"ReAct Loop node"</span>
+            </div>
+        }.into_any(),
     }
 }
