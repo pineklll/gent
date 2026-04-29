@@ -546,6 +546,9 @@ pub fn AppLayout() -> impl IntoView {
                     crate::components::canvas::state::NodeVariant::Template { template } => {
                         *template = new_text;
                     }
+                    crate::components::canvas::state::NodeVariant::ReActLoop { action_type, .. } => {
+                        *action_type = new_text;
+                    }
                     _ => {}
                 }
             }
@@ -556,10 +559,14 @@ pub fn AppLayout() -> impl IntoView {
     let handle_limit_change = move |node_id: u32, new_limit: usize| {
         set_nodes.update(|nodes: &mut Vec<NodeState>| {
             if let Some(node) = nodes.iter_mut().find(|n| n.id == node_id) {
-                if let crate::components::canvas::state::NodeVariant::Retrieval { limit, .. } =
-                    &mut node.variant
-                {
-                    *limit = new_limit;
+                match &mut node.variant {
+                    crate::components::canvas::state::NodeVariant::Retrieval { limit, .. } => {
+                        *limit = new_limit;
+                    }
+                    crate::components::canvas::state::NodeVariant::ReActLoop { max_iterations, .. } => {
+                        *max_iterations = new_limit as u32;
+                    }
+                    _ => {}
                 }
             }
         });
@@ -1353,7 +1360,34 @@ pub fn AppLayout() -> impl IntoView {
                                         // Insert action_input as the query for the retrieval node
                                         node_results.insert(target_node_id, action_input.clone());
 
-                                        // Find and execute the retrieval node downstream
+                                        // Execute the entry retrieval node (target_node_id)
+                                        if let Some(ret_node) = nodes_snapshot.iter().find(|n| n.id == target_node_id) {
+                                            if ret_node.node_type == "retrieval" {
+                                                let query_text = node_results.get(&target_node_id).cloned().unwrap_or_default();
+                                                let (virtual_uri, limit) = if let NodeVariant::Retrieval { virtual_uri, limit } = &ret_node.variant {
+                                                    (virtual_uri.clone(), *limit)
+                                                } else {
+                                                    (String::new(), 10)
+                                                };
+
+                                                let result = call_retrieve(virtual_uri, query_text, limit).await;
+                                                let observation = match result {
+                                                    Ok(results) => results.iter().map(|r| r.text.clone()).collect::<Vec<_>>().join("\n---\n"),
+                                                    Err(e) => format!("Error: {}", e),
+                                                };
+
+                                                node_results.insert(target_node_id, observation.clone());
+                                                loop_task.add_message(&format!("Observation: {}", observation), TraceLevel::Info);
+
+                                                // Append to history
+                                                history.push_str(&format!(
+                                                    "Thought: {}\nAction: {}\nAction Input: {}\nObservation: {}\n",
+                                                    llm_output, action, action_input, observation
+                                                ));
+                                            }
+                                        }
+
+                                        // Find and execute downstream retrieval nodes (excluding target_node_id)
                                         let retrieval_order = execute_downstream_order(&nodes_snapshot, &connections_snapshot, target_node_id);
 
                                         for retrieval_node_id in retrieval_order {

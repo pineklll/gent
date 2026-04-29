@@ -541,10 +541,41 @@ fn InspectorProperties(
                 <span class="property-readonly">"Query Translation node"</span>
             </div>
         }.into_any(),
-        NodeVariant::ReActLoop { .. } => view! {
-            <div class="property-group">
-                <span class="property-readonly">"ReAct Loop node"</span>
-            </div>
-        }.into_any(),
+        NodeVariant::ReActLoop { action_type, max_iterations } => {
+            let max_iter_for_select = max_iterations;
+            let max_iter_clone = max_iterations;
+            let action_type_clone = action_type.clone();
+            view! {
+                <div class="property-group">
+                    <label class="property-label">"Action Type"</label>
+                    <select
+                        class="property-input"
+                        on:change=move |ev| {
+                            let new_value = event_target_value(&ev);
+                            on_update_node.run((node_id, NodeVariant::ReActLoop { action_type: new_value, max_iterations: max_iter_for_select }));
+                        }
+                    >
+                        <option value="retrieval" selected={action_type == "retrieval"}>"Retrieval"</option>
+                        <option value="web_search" selected={action_type == "web_search"} disabled>"Web Search (future)"</option>
+                        <option value="code_exec" selected={action_type == "code_exec"} disabled>"Code Exec (future)"</option>
+                    </select>
+                </div>
+                <div class="property-group">
+                    <label class="property-label">"Max Iterations"</label>
+                    <input
+                        type="number"
+                        class="property-input"
+                        prop:value={max_iter_clone as f64}
+                        min="1"
+                        max="100"
+                        on:change=move |ev| {
+                            if let Ok(new_value) = event_target_value(&ev).parse::<u32>() {
+                                on_update_node.run((node_id, NodeVariant::ReActLoop { action_type: action_type_clone.clone(), max_iterations: new_value }));
+                            }
+                        }
+                    />
+                </div>
+            }.into_any()
+        }
     }
 }
