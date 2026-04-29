@@ -1242,6 +1242,13 @@ pub fn AppLayout() -> impl IntoView {
                         let (action_type, max_iterations) = if let NodeVariant::ReActLoop { action_type, max_iterations } = variant {
                             (action_type, max_iterations)
                         } else {
+                            let mut task = Task::new(exec_node_id, "react_loop", parent_id.clone());
+                            task.status = TaskStatus::Complete;
+                            task.finished_at = Some(Timestamp::now());
+                            task.result = Some("Error: invalid variant".to_string());
+                            task.add_message("Error: react_loop node has invalid variant", TraceLevel::Error);
+                            node_results.insert(exec_node_id, "Error: invalid variant".to_string());
+                            exec.tasks.push(task);
                             return;
                         };
 
@@ -1323,6 +1330,15 @@ pub fn AppLayout() -> impl IntoView {
 
                                 loop_task.add_message(&format!("Action: {} with input: {}", action, action_input), TraceLevel::Info);
 
+                                // Validate action against action_type
+                                let allowed_actions = action_type.split(',').map(|s| s.trim().to_lowercase()).collect::<Vec<_>>();
+                                let action_lower = action.to_lowercase();
+                                if !allowed_actions.iter().any(|a| a == &action_lower || *a == "all") {
+                                    loop_task.add_message(&format!("Action '{}' is not allowed by action_type '{}'", action, action_type), TraceLevel::Warn);
+                                    final_answer = Some(format!("Error: action '{}' is not allowed. Allowed actions: {}", action, action_type));
+                                    break;
+                                }
+
                                 // Execute action via subgraph
                                 if action == "retrieval" {
                                     // Fire action_trigger to connected retrieval node
@@ -1378,10 +1394,8 @@ pub fn AppLayout() -> impl IntoView {
                                         }
                                     } else {
                                         loop_task.add_message("No action_trigger connection - cannot execute action", TraceLevel::Warn);
-                                        history.push_str(&format!(
-                                            "Thought: {}\nAction: {}\nAction Input: {}\nObservation: Error: no action_trigger connection\n",
-                                            llm_output, action, action_input
-                                        ));
+                                        final_answer = Some("Error: no action_trigger connection".to_string());
+                                        break;
                                     }
                                 } else if action == "web_search" {
                                     loop_task.add_message("web_search not yet implemented", TraceLevel::Warn);
@@ -1397,10 +1411,8 @@ pub fn AppLayout() -> impl IntoView {
                                     ));
                                 } else {
                                     loop_task.add_message(&format!("Unknown action type: {}", action), TraceLevel::Warn);
-                                    history.push_str(&format!(
-                                        "Thought: {}\nAction: {}\nAction Input: {}\nObservation: Error: unknown action type\n",
-                                        llm_output, action, action_input
-                                    ));
+                                    final_answer = Some(format!("Error: unknown action type: {}", action));
+                                    break;
                                 }
                             } else {
                                 // Couldn't parse - treat as thought
@@ -1411,7 +1423,12 @@ pub fn AppLayout() -> impl IntoView {
 
                         if final_answer.is_none() {
                             loop_task.add_message("Max iterations reached without FINAL answer", TraceLevel::Warn);
-                            final_answer = Some("Max iterations reached without producing a final answer.".to_string());
+                            // Use history as final answer, or a generic message if no history
+                            final_answer = if history.is_empty() {
+                                Some("Max iterations reached without producing a final answer.".to_string())
+                            } else {
+                                Some(history.trim().to_string())
+                            };
                         }
 
                         loop_task.status = TaskStatus::Complete;
